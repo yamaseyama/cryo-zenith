@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>補助金・助成金AI診断 | 3分でわかる最適プラン</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+
+    <header>
+        <div class="container header-container">
+            <div class="logo">BizSupport AI</div>
+            <nav>
+                <a href="#">ホーム</a>
+                <a href="#">診断について</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+
+        <!-- Hero Section -->
+        <section id="hero" class="hero">
+            <h1>
+                <span class="inline-block">あなたの会社に最適な</span>
+                <span class="inline-block">補助金・助成金を</span>
+                <span class="inline-block">AIが3分で診断します</span>
+            </h1>
+            <p>複雑な検索は不要。<br class="mobile-break">簡単な質問に答えるだけで、受給可能性の高い制度をピックアップ。</p>
+            <button id="start-btn" class="btn primary-btn">診断を始める</button>
+        </section>
+
+        <!-- Form Section -->
+        <section id="diagnosis-form" class="hidden">
+            <!-- Step Indicators -->
+            <div class="stepper">
+                <div class="step active" id="step-marker-1">1. 基本情報</div>
+                <div class="step" id="step-marker-2">2. 詳細情報</div>
+            </div>
+
+            <form id="subsidy-form">
+                <!-- Step 1 -->
+                <div id="step-1" class="form-step">
+                    <h2>まずは貴社のことを教えてください</h2>
+
+                    <!-- 会社情報セクション -->
+                    <div class="section-group">
+                        <h3>会社情報</h3>
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label for="company_name">会社名<span class="required">必須</span></label>
+                                <input type="text" id="company_name" name="company_name" required
+                                    placeholder="例: 株式会社サンプル">
+                            </div>
+                            <div class="form-group half">
+                                <label for="contact_person">担当者名<span class="required">必須</span></label>
+                                <input type="text" id="contact_person" name="contact_person" required
+                                    placeholder="例: 山田 太郎">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label for="phone">電話番号<span class="required">必須</span></label>
+                                <input type="tel" id="phone" name="phone" required placeholder="例: 03-1234-5678">
+                            </div>
+                            <div class="form-group half">
+                                <label for="email">メールアドレス<span class="required">必須</span></label>
+                                <input type="email" id="email" name="email" required placeholder="例: info@example.com">
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="divider">
+
+                    <!-- 基本属性セクション -->
+                    <div class="section-group">
+                        <h3>基本属性</h3>
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label for="prefecture">所在地（都道府県）<span class="required">必須</span></label>
+                                <select id="prefecture" name="prefecture" required>
+                                    <option value="">選択してください</option>
+                                    <option value="東京都">東京都</option>
+                                    <option value="大阪府">大阪府</option>
+                                    <option value="愛知県">愛知県</option>
+                                    <option value="福岡県">福岡県</option>
+                                    <option value="北海道">北海道</option>
+                                    <option value="その他">その他</option>
+                                </select>
+                            </div>
+                            <div class="form-group half">
+                                <label for="city">所在地（市区町村）<span class="required">必須</span></label>
+                                <input type="text" id="city" name="city" required placeholder="例: 千代田区神田錦町">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="industry">業種<span class="required">必須</span></label>
+                            <select id="industry" name="industry" required>
+                                <option value="">選択してください</option>
+                                <option value="manufacturing">製造業</option>
+                                <option value="retail">小売業</option>
+                                <option value="service">サービス業</option>
+                                <option value="it">情報通信業</option>
+                                <option value="restaurant">飲食業</option>
+                                <option value="construction">建設業</option>
+                                <option value="other">その他</option>
+                            </select>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label for="employees_count">従業員数<span class="required">必須</span></label>
+                                <input type="number" id="employees_count" name="employees_count" min="0"
+                                    placeholder="正社員・パート含む（人）">
+                            </div>
+                            <div class="form-group half">
+                                <label for="sales_amount">昨年度の売上規模<span class="required">必須</span></label>
+                                <select id="sales_amount" name="sales_amount" required>
+                                    <option value="">選択してください</option>
+                                    <option value="under_1000">1,000万円未満</option>
+                                    <option value="1000_5000">1,000万円〜5,000万円</option>
+                                    <option value="5000_1oku">5,000万円〜1億円</option>
+                                    <option value="1oku_5oku">1億円〜5億円</option>
+                                    <option value="over_5oku">5億円以上</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="divider">
+
+                    <div class="form-group">
+                        <label>今やりたいこと（複数選択可）<span class="required">必須</span></label>
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" name="purposes" value="hiring"> 人材採用・雇用拡大</label>
+                            <label><input type="checkbox" name="purposes" value="it_implementation"> ITツール導入・DX</label>
+                            <label><input type="checkbox" name="purposes" value="productivity"> 生産性向上・設備投資</label>
+                            <label><input type="checkbox" name="purposes" value="new_product"> 新製品・新サービス開発</label>
+                            <label><input type="checkbox" name="purposes" value="marketing"> 販路開拓・広告宣伝</label>
+                            <label><input type="checkbox" name="purposes" value="startup"> 創業・起業</label>
+                        </div>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button type="button" id="to-step-2" class="btn primary-btn">次へ進む</button>
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div id="step-2" class="form-step hidden">
+                    <h2>精度を高めるための追加質問</h2>
+                    <p class="desc">より正確な診断のために、可能な範囲でお答えください。</p>
+
+                    <div class="form-group">
+                        <label>雇用保険の適用事業所ですか？</label>
+                        <div class="radio-group">
+                            <label><input type="radio" name="insurance" value="yes" checked> はい</label>
+                            <label><input type="radio" name="insurance" value="no"> いいえ</label>
+                            <label><input type="radio" name="insurance" value="unknown"> わからない</label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="investment">今後1年間の投資予定額</label>
+                        <select id="investment" name="investment">
+                            <option value="">未定</option>
+                            <option value="under_100">100万円未満</option>
+                            <option value="100_500">100〜500万円</option>
+                            <option value="500_1000">500〜1000万円</option>
+                            <option value="over_1000">1000万円以上</option>
+                        </select>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button type="button" id="back-to-step-1" class="btn secondary-btn">戻る</button>
+                        <button type="submit" id="submit-btn" class="btn primary-btn">診断する</button>
+                    </div>
+                </div>
+            </form>
+        </section>
+
+        <!-- Loading Section -->
+        <section id="loading" class="hidden">
+            <div class="loading-spinner"></div>
+            <p>AIが最適な制度を分析中...<br>（この処理には10〜20秒ほどかかる場合があります）</p>
+        </section>
+
+        <!-- Results Section -->
+        <section id="results" class="hidden">
+            <div class="results-header">
+                <h2>診断結果</h2>
+                <div id="ai-summary" class="ai-summary-box">
+                    <h3>AI総評</h3>
+                    <p id="summary-text">ここにAIからの総評が入ります。</p>
+                </div>
+            </div>
+
+            <div id="programs-list">
+                <!-- JSで動的生成 -->
+            </div>
+
+            <div class="action-buttons">
+                <button id="restart-btn" class="btn secondary-btn">条件を変えて再診断</button>
+            </div>
+        </section>
+
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2026 Subsidy Diagnosis System. MVP version.</p>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
