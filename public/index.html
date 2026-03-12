@@ -20,8 +20,7 @@
         <div class="container header-container">
             <div class="logo">BizSupport AI</div>
             <nav>
-                <a href="#">ホーム</a>
-                <a href="#">診断について</a>
+                <a href="/" id="nav-home">ホーム</a>
             </nav>
         </div>
     </header>
@@ -43,46 +42,17 @@
         <section id="diagnosis-form" class="hidden">
             <!-- Step Indicators -->
             <div class="stepper">
-                <div class="step active" id="step-marker-1">1. 基本情報</div>
-                <div class="step" id="step-marker-2">2. 詳細情報</div>
+                <div class="step active" id="step-marker-1">1. 事業情報</div>
+                <div class="step" id="step-marker-2">2. 詳細質問</div>
+                <div class="step" id="step-marker-3">3. お客様情報</div>
             </div>
 
             <form id="subsidy-form">
-                <!-- Step 1 -->
+                <!-- Step 1: 事業情報（心理的負荷の低い質問を先に） -->
                 <div id="step-1" class="form-step">
-                    <h2>まずは貴社のことを教えてください</h2>
+                    <h2>事業についてお聞かせください</h2>
+                    <p class="desc">簡単な質問に答えるだけで、最適な補助金・助成金をAIが診断します。</p>
 
-                    <!-- 会社情報セクション -->
-                    <div class="section-group">
-                        <h3>会社情報</h3>
-                        <div class="form-row">
-                            <div class="form-group half">
-                                <label for="company_name">会社名<span class="required">必須</span></label>
-                                <input type="text" id="company_name" name="company_name" required
-                                    placeholder="例: 株式会社サンプル">
-                            </div>
-                            <div class="form-group half">
-                                <label for="contact_person">担当者名<span class="required">必須</span></label>
-                                <input type="text" id="contact_person" name="contact_person" required
-                                    placeholder="例: 山田 太郎">
-                            </div>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group half">
-                                <label for="phone">電話番号<span class="required">必須</span></label>
-                                <input type="tel" id="phone" name="phone" required placeholder="例: 03-1234-5678">
-                            </div>
-                            <div class="form-group half">
-                                <label for="email">メールアドレス<span class="required">必須</span></label>
-                                <input type="email" id="email" name="email" required placeholder="例: info@example.com">
-                            </div>
-                        </div>
-                    </div>
-
-                    <hr class="divider">
-
-                    <!-- 基本属性セクション -->
                     <div class="section-group">
                         <h3>基本属性</h3>
                         <div class="form-row">
@@ -157,7 +127,7 @@
                     </div>
                 </div>
 
-                <!-- Step 2 -->
+                <!-- Step 2: 詳細質問 -->
                 <div id="step-2" class="form-step hidden">
                     <h2>精度を高めるための追加質問</h2>
                     <p class="desc">より正確な診断のために、可能な範囲でお答えください。</p>
@@ -184,6 +154,54 @@
 
                     <div class="action-buttons">
                         <button type="button" id="back-to-step-1" class="btn secondary-btn">戻る</button>
+                        <button type="button" id="to-step-3" class="btn primary-btn">次へ進む</button>
+                    </div>
+                </div>
+
+                <!-- Step 3: 会社情報（最後に聞く → 離脱率改善） -->
+                <div id="step-3" class="form-step hidden">
+                    <h2>診断結果をお届けするため、ご連絡先を入力してください</h2>
+
+                    <div class="almost-done-banner">
+                        <span class="almost-done-icon">🎯</span>
+                        <p>あと一歩で診断結果が表示されます！</p>
+                    </div>
+
+                    <div class="section-group">
+                        <h3>会社情報</h3>
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label for="company_name">会社名<span class="required">必須</span></label>
+                                <input type="text" id="company_name" name="company_name" required
+                                    placeholder="例: 株式会社サンプル">
+                            </div>
+                            <div class="form-group half">
+                                <label for="contact_person">担当者名<span class="required">必須</span></label>
+                                <input type="text" id="contact_person" name="contact_person" required
+                                    placeholder="例: 山田 太郎">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label for="phone">電話番号<span class="required">必須</span></label>
+                                <input type="tel" id="phone" name="phone" required placeholder="例: 03-1234-5678">
+                            </div>
+                            <div class="form-group half">
+                                <label for="email">メールアドレス<span class="required">必須</span></label>
+                                <input type="email" id="email" name="email" required placeholder="例: info@example.com">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="privacy-agreement">
+                        <label>
+                            <input type="checkbox" id="privacy-policy-agree" required>
+                            <a href="/privacy.html" target="_blank">プライバシーポリシー</a>に同意する
+                        </label>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button type="button" id="back-to-step-2" class="btn secondary-btn">戻る</button>
                         <button type="submit" id="submit-btn" class="btn primary-btn">診断する</button>
                     </div>
                 </div>
@@ -206,6 +224,16 @@
                 </div>
             </div>
 
+            <!-- 商談設定CTAボタン (上部に配置) -->
+            <div class="consultation-cta">
+                <div class="cta-inner">
+                    <h3>💼 これらの補助金をまとめて申請相談しませんか？</h3>
+                    <p>専門のコンサルタントが、診断結果に基づいた最適な申請プランをご提案します。</p>
+                    <a href="https://timerex.net/s/yamagutiyuki0322_a0b6/4d99ac46" target="_blank"
+                        rel="noopener noreferrer" class="btn cta-btn">まとめて申請相談する（無料）</a>
+                </div>
+            </div>
+
             <div id="programs-list">
                 <!-- JSで動的生成 -->
             </div>
@@ -218,8 +246,11 @@
     </main>
 
     <footer>
-        <div class="container">
-            <p>&copy; 2026 Subsidy Diagnosis System. MVP version.</p>
+        <div class="container footer-content">
+            <div class="footer-links">
+                <a href="/privacy.html" target="_blank">プライバシーポリシー</a>
+            </div>
+            <p>&copy; 2026 TopRight inc. All rights reserved.</p>
         </div>
     </footer>
 

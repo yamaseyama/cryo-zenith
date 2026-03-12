@@ -64,6 +64,24 @@ const initDB = async () => {
             )
         `);
 
+        // 商談予約テーブル
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS consultations (
+                id SERIAL PRIMARY KEY,
+                company_name TEXT,
+                contact_person TEXT,
+                phone TEXT,
+                email TEXT,
+                preferred_date1 TEXT,
+                preferred_date2 TEXT,
+                preferred_date3 TEXT,
+                consultation_note TEXT,
+                matched_programs TEXT,
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
         console.log('テーブル作成完了');
 
         // 既存データの削除（開発リセット用）

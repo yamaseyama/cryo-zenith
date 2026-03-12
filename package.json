@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "db:reset": "node database.js"
+    "db:reset": "node database.js",
+    "db:update": "node update_programs.js",
+    "db:check": "node check_freshness.js",
+    "db:fetch": "node fetch_jgrants.js"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +20,7 @@
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.3.1",
     "openai": "^6.22.0",
     "pg": "^8.20.0"
   },

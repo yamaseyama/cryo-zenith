@@ -3,3 +3,5 @@ node_modules/
 subsidy.db
 *.log
 .DS_Store
+.vercel
+.env*.local

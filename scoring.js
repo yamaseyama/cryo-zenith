@@ -1,127 +1,195 @@
 /**
- * Scoring Logic
- * 
- * fit_score = 
- * (地域一致 × 25) 
- * + (業種一致 × 20) 
- * + (目的一致 × 20) 
- * + (規模一致 × 15) 
- * + (embedding類似度 × 10) -> MVPでは一旦キーワード/タグから簡易計算 or 0
- * + (鮮度補正 × 5) 
- * + (フィードバック補正 × 5)
- * 
- * 合計 100点
+ * scoring.js - 補助金マッチングスコアリングロジック
+ *
+ * 修正ポイント（2026-03-13 根本調査後の改訂）:
+ * 1. purpose_tags が文字列 or 配列の両方に対応する安全なパース処理を追加
+ * 2. scope が null/undefined の場合の failsafe を追加  
+ * 3. 「全国」文字列と 'national' スコープの両方に対応
+ * 4. 詳細なデバッグログを追加（判定前に変数を出力）
+ * 5. ニッチ案件への重み付けボーナスを強화
  */
+
+const DEBUG = process.env.SCORING_DEBUG === 'true'; // 環境変数でデバッグ切替
+
+/**
+ * 安全に JSON をパースして配列を返す
+ * DB から文字列で来る場合も、すでに配列の場合も両方対応
+ */
+function safeParseArray(val) {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string') {
+        try {
+            const parsed = JSON.parse(val);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            return [];
+        }
+    }
+    return [];
+}
 
 /**
  * calculateScore
- * @param {Object} companyStr - 企業情報 (リクエストボディ)
- * @param {Object} program - 制度データ (DB行)
+ * @param {Object} company - 企業情報 (リクエストボディ)
+ * @param {Object} program - 制度データ (DB行、または server.js でパース済み)
  * @returns {Object} { score: number, reasons: string[] }
  */
 function calculateScore(company, program) {
     let score = 0;
     const reasons = [];
 
-    // 1. 地域一致 (25点)
-    let regionScore = 0;
-    if (program.scope === 'national') {
-        regionScore = 25;
-        reasons.push('全国対象の制度です');
-    } else if (program.scope === 'prefecture' && program.prefecture === company.prefecture) {
-        regionScore = 25;
-        reasons.push(`${program.prefecture}の制度です`);
-    }
-    score += regionScore;
+    // --- データの安全なパース（文字列のまま来る場合も対応） ---
+    const industryTags = safeParseArray(program.industry_tags);
+    const purposeTags = safeParseArray(program.purpose_tags);
+    const employeeRangeTags = safeParseArray(program.employee_range_tags);
+    const companyPurposes = safeParseArray(company.purposes); // 企業側も念のためパース
 
-    // 2. 業種一致 (20点)
-    let industryScore = 0;
-    // program.industry_tags はパース済み配列と想定
-    // 'all' が含まれているか、company.industry が含まれているか
-    if (program.industry_tags.includes('all') || program.industry_tags.includes(company.industry)) {
-        industryScore = 20;
-        reasons.push('業種が対象範囲内です');
-    }
-    score += industryScore;
+    // =============================================
+    // STEP 1: 地域の完全一致チェック（足切り Must要件）
+    // =============================================
+    // 修正: scope が undefined/null/空 の場合は通過させる（データ不備は除外しない）
+    const scope = program.scope || 'national';
 
-    // 3. 目的一致 (20点)
-    let purposeScore = 0;
-    // company.purposes は配列
-    if (program.purpose_tags && company.purposes && Array.isArray(company.purposes)) {
-        const matches = company.purposes.filter(p => program.purpose_tags.includes(p));
-        if (matches.length > 0) {
-            // 1つでも一致すればOKとするか、割合で出すか。仕様では「目的一致」なので20点満点を与える運用にする
-            purposeScore = 20;
-            reasons.push(`目的(${matches.map(m => translatePurpose(m)).join(', ')})が合致します`);
+    if (DEBUG) {
+        console.log(`\n[SCORE DEBUG] === ${program.id}: ${program.name} ===`);
+        console.log(`  scope: "${scope}" | program.prefecture: "${program.prefecture}" | company.prefecture: "${company.prefecture}"`);
+        console.log(`  industryTags: ${JSON.stringify(industryTags)} | company.industry: "${company.industry}"`);
+        console.log(`  purposeTags: ${JSON.stringify(purposeTags)} | companyPurposes: ${JSON.stringify(companyPurposes)}`);
+        console.log(`  application_status: "${program.application_status}" | freshness_status: "${program.freshness_status}"`);
+    }
+
+    if (scope === 'prefecture') {
+        if (!program.prefecture || program.prefecture !== company.prefecture) {
+            if (DEBUG) console.log(`  [REJECT] 地域不一致: ${program.prefecture} vs ${company.prefecture}`);
+            return { score: 0, reasons: [`${program.prefecture || '特定地域'}限定の制度のため、所在地が一致しません`] };
         }
-    }
-    score += purposeScore;
-
-    // 4. 規模一致 (15点)
-    let scaleScore = 0;
-    // 従業員数から規模タグを推定
-    const companyScale = getCompanyScale(company.employees_count);
-    if (program.employee_range_tags.includes('all') || program.employee_range_tags.includes(companyScale)) {
-        scaleScore = 15;
-        reasons.push('企業規模の条件を満たしています');
-    }
-    score += scaleScore;
-
-    // 5. Embedding類似度 (10点) - MVPでは後回し/プレースホルダー
-    // ここでは簡易的に、テキストキーワードの一致で代用実装しておく
-    // 企業が入力した「今やりたいこと」などのテキストがあればそれを使うが、今回は選択式メインなので0点スタート
-    // ※今回は実装しないが、拡張ポイントとして残す
-    score += 0;
-
-    // 6. 鮮度補正 (5点)
-    const daysSinceCheck = (new Date() - new Date(program.last_verified_at)) / (1000 * 60 * 60 * 24);
-    if (program.freshness_status === 'expired_suspected') {
-        score -= 5;
-    } else if (daysSinceCheck <= 90) {
-        score += 5;
-        reasons.push('情報が最新です');
-    } else if (daysSinceCheck <= 180) {
-        score += 3;
+        score += 25;
+        reasons.push(`${program.prefecture}の制度です（地域一致）`);
     } else {
-        score += 1;
+        // 'national' または scope 未設定 → 全国対象として通過（ただし加点抑制）
+        score += 15; // 全国案件は基礎点を抑える
+        reasons.push('全国対象の制度です');
     }
 
-    // 7. フィードバック補正 (5点) - MVPでは実装簡略化のため一旦省略、またはDBから平均レート取得
-    // ここでは 0 とする
-    score += 0;
+    // =============================================
+    // STEP 2: 鮮度チェック（足切り）
+    // =============================================
+    // 修正: stale / expired は即座に 0 点で除外
+    const status = (program.application_status || '').toLowerCase();
+    const freshness = (program.freshness_status || '').toLowerCase();
 
-    // 8. Application Status補正 (減点/加点)
-    if (program.application_status === 'open') {
+    if (status === 'stale' || status === 'expired' || freshness === 'expired_suspected') {
+        if (DEBUG) console.log(`  [REJECT] 鮮度不合格: status=${status}, freshness=${freshness}`);
+        return { score: 0, reasons: ['情報が古いため対象外です（過去年度データ）'] };
+    }
+
+    // =============================================
+    // STEP 3: 目的の必須フィルタリング（足切り Must要件）
+    // =============================================
+    if (purposeTags.length === 0) {
+        // 目的タグがない補助金は汎用として通過させるが低加点
         score += 5;
-        reasons.push('現在公募中です');
-    } else if (program.application_status === 'upcoming') {
-        score += 2;
-        reasons.push('今後公募開始予定です');
-    } else if (program.application_status === 'closed') {
-        score -= 10;
-        reasons.push('現在公募期間外の可能性があります');
+        reasons.push('目的タグ未設定の制度です');
+    } else if (companyPurposes.length === 0) {
+        if (DEBUG) console.log(`  [REJECT] 企業の目的入力なし`);
+        return { score: 0, reasons: ['目的が入力されていないため診断できません'] };
+    } else {
+        const matchingPurposes = companyPurposes.filter(p => purposeTags.includes(p));
+        if (DEBUG) console.log(`  [DEBUG] matchingPurposes: ${JSON.stringify(matchingPurposes)}`);
+
+        if (matchingPurposes.length === 0) {
+            if (DEBUG) console.log(`  [REJECT] 目的不一致`);
+            return { score: 0, reasons: ['選択された目的に合致する内容が含まれていません'] };
+        }
+
+        // ニッチな目的への重み付け: ニッチ目的は高加点
+        const nicheTargets = ['it_implementation', 'productivity', 'new_product', 'startup', 'branding'];
+        const nicheCount = matchingPurposes.filter(p => nicheTargets.includes(p)).length;
+        const purposeScore = 15 + (nicheCount * 15); // ニッチ目的1つにつき +15
+        score += Math.min(purposeScore, 40); // 上限40
+        reasons.push(`目的(${matchingPurposes.map(m => translatePurpose(m)).join(', ')})が合致します`);
     }
 
+    // =============================================
+    // STEP 4: 業種一致と重み付け（パーソナライズ強化）
+    // =============================================
+    // 修正: 汎用案件('all')は加点抑制、特定業種一致は大幅ボーナス
+    if (industryTags.length === 0 || industryTags.includes('all')) {
+        score += 8; // 汎用案件は低加点
+        reasons.push('幅広い業種が対象の汎用的な制度です');
+    } else if (industryTags.includes(company.industry)) {
+        score += 30; // 業種特化案件はハイボーナス
+        reasons.push(`業種(${translateIndustry(company.industry)})に特化した支援です！`);
+    } else {
+        if (DEBUG) console.log(`  [REJECT] 業種不一致: ${JSON.stringify(industryTags)} vs ${company.industry}`);
+        return { score: 0, reasons: ['対象業種に該当しません'] };
+    }
+
+    // =============================================
+    // STEP 5: 企業規模チェック
+    // =============================================
+    const companyScale = getCompanyScale(company.employees_count);
+    if (employeeRangeTags.length === 0 || employeeRangeTags.includes('all')) {
+        score += 8;
+        reasons.push('幅広い企業規模が対象です');
+    } else if (employeeRangeTags.includes(companyScale)) {
+        score += 12;
+        reasons.push('企業規模の条件に合致しています');
+    }
+    // 規模が合わない場合は足切りせず0加点（ソフト除外）
+
+    // =============================================
+    // STEP 6: 公募ステータスと鮮度補正
+    // =============================================
+    if (status === 'open') {
+        score += 10;
+        reasons.push('現在公募中です（即応性あり）');
+    } else if (status === 'upcoming') {
+        score += 5;
+        reasons.push('今後公募予定です（事前準備推奨）');
+    } else if (status === 'closed') {
+        // 明示的に closed のものは除外
+        if (DEBUG) console.log(`  [REJECT] 公募終了: status=${status}`);
+        return { score: 0, reasons: ['公募期間が終了しています'] };
+    }
+    // status が null/unknown の場合は通過させる（データ不備を許容）
+
+    const daysSinceVerified = (new Date() - new Date(program.last_verified_at)) / (1000 * 60 * 60 * 24);
+    if (daysSinceVerified <= 90) {
+        score += 5;
+        reasons.push('直近で確認された最新情報です');
+    }
+
+    if (DEBUG) console.log(`  [SCORE] 最終スコア: ${score}`);
     return { score, reasons };
 }
 
 // Helper: 従業員数から規模タグへ変換
 function getCompanyScale(count) {
-    if (!count) return 'micro'; // デフォルト
-    // 簡易定義
-    if (count <= 5) return 'micro'; // 小規模
-    if (count <= 20) return 'small'; // 中小
-    if (count <= 100) return 'medium'; // 中堅
-    return 'large'; // 大企業
+    const n = parseInt(count, 10);
+    if (!n || n <= 5) return 'micro';
+    if (n <= 20) return 'small';
+    if (n <= 100) return 'medium';
+    return 'large';
 }
 
-// Helper: 目的タグの日本語変換 (表示用)
+// Helper: 業種タグの日本語変換（デバッグ・表示用）
+function translateIndustry(tag) {
+    const map = {
+        manufacturing: '製造業', retail: '小売業', service: 'サービス業',
+        it: '情報通信業', restaurant: '飲食業', construction: '建設業',
+        agriculture: '農業', other: 'その他'
+    };
+    return map[tag] || tag;
+}
+
+// Helper: 目的タグの日本語変換（表示用）
 function translatePurpose(tag) {
     const map = {
         'productivity': '生産性向上',
-        'new_product': '新製品開発',
+        'new_product': '新製品・新サービス開発',
         'business_model': 'ビジネスモデル変革',
-        'it_implementation': 'IT導入',
+        'it_implementation': 'IT導入・DX',
         'efficiency': '業務効率化',
         'remote_work': 'テレワーク',
         'hiring': '人材採用',
@@ -129,7 +197,7 @@ function translatePurpose(tag) {
         'marketing': '販路開拓',
         'sales_expansion': '売上拡大',
         'branding': 'ブランディング',
-        'startup': '創業',
+        'startup': '創業・起業',
         'office_rent': 'オフィス賃料'
     };
     return map[tag] || tag;

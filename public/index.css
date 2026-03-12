@@ -1,0 +1,90 @@
+/* =========================================
+   Footer Styles
+   ========================================= */
+footer {
+    background-color: #1e293b;
+    color: #cbd5e1;
+    padding: 2rem 0;
+    text-align: center;
+    margin-top: 4rem;
+}
+
+.footer-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.footer-links a {
+    color: #cbd5e1;
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: color 0.3s ease;
+}
+
+.footer-links a:hover {
+    color: white;
+    text-decoration: underline;
+}
+
+footer p {
+    font-size: 0.85rem;
+    margin: 0;
+    color: #94a3b8;
+}
+
+/* =========================================
+   Consultation CTA Style (Results Page)
+   ========================================= */
+.consultation-cta {
+    margin: 3rem 0;
+    padding: 3rem 2rem;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+    text-align: center;
+    box-shadow: 0 10px 25px rgba(29, 78, 216, 0.2);
+}
+
+.consultation-cta .cta-inner {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.consultation-cta h3 {
+    color: white;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.consultation-cta p {
+    color: #eff6ff;
+    margin-bottom: 2rem;
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.consultation-cta .cta-btn {
+    display: inline-block;
+    background-color: white;
+    color: #1e40af;
+    font-weight: 700;
+    font-size: 1.1rem;
+    padding: 1rem 2.5rem;
+    border-radius: 50px;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    border: 2px solid white;
+}
+
+.consultation-cta .cta-btn:hover {
+    background-color: transparent;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}

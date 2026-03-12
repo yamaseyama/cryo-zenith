@@ -81,4 +81,54 @@ function mockResponse(programs) {
     };
 }
 
-module.exports = { generateExplanation };
+/**
+ * generateChatResponse
+ * ユーザーからの特定の補助金に関する質問に答える
+ * 
+ * @param {Object} program - 質問対象の補助金情報
+ * @param {string} question - ユーザーからの質問
+ * @returns {Promise<string>} - LLMの回答テキスト
+ */
+async function generateChatResponse(program, question) {
+    if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'your_api_key_here') {
+        console.log('OpenAI API Key not found. Using mock chat response.');
+        return "（デモモードによる自動応答）いただいたご質問につきましては、公式サイトや公募要領を直接ご確認いただくか、事務局への問い合わせをおすすめいたします。\n\n対象補助金: " + program.name;
+    }
+
+    try {
+        const prompt = `
+あなたは中小企業の経営を支援する、プロの補助金アドバイザーです。
+ユーザーから特定の補助金について以下の質問がありました。提示された補助金の情報を元に、簡潔で分かりやすく回答してください。
+
+# 対象の補助金情報
+- 名称: ${program.name}
+- 種類: ${program.type === 'grant' ? '助成金' : '補助金'}
+- 対象者について: ${program.eligibility_text}
+- 補助内容（メリット）: ${program.benefit_text}
+- 補助上限額: ${program.amount_text}
+- 公式URL: ${program.official_url}
+- AIによる判定理由: ${program.why_fit_llm || program.reasons?.join('。') || 'なし'}
+
+# ユーザーからの質問:
+${question}
+
+[回答のルール]
+- 丁寧な「です・ます」調で回答すること。
+- 150〜300文字程度で簡潔にまとめること。
+- 提供された補助金情報から確実なことが言えない場合は、「公募要領をご確認ください」と案内すること。
+`;
+
+        const completion = await openai.chat.completions.create({
+            messages: [{ role: "system", content: "You are a helpful and professional consultant." }, { role: "user", content: prompt }],
+            model: "gpt-4o-mini", // チャットはレスポンスの速いモデルを使用
+        });
+
+        return completion.choices[0].message.content;
+
+    } catch (error) {
+        console.error('LLM chat error:', error);
+        return "申し訳ありません。現在AIシステムが混み合っており、回答を生成できませんでした。少し時間をおいて再度お試しください。";
+    }
+}
+
+module.exports = { generateExplanation, generateChatResponse };
