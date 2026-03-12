@@ -208,10 +208,15 @@ app.post('/api/diagnose', async (req, res) => {
                     insurance: targetCompany.insurance === 'yes' ? 'はい' : 'いいえ',
                     investment: investmentMap[targetCompany.investment] || targetCompany.investment || '未設定',
                     diagnosis_1: displayPrograms[0] ? displayPrograms[0].name : '',
+                    compatibility_1: displayPrograms[0] ? displayPrograms[0].fit_score : '',
                     diagnosis_2: displayPrograms[1] ? displayPrograms[1].name : '',
+                    compatibility_2: displayPrograms[1] ? displayPrograms[1].fit_score : '',
                     diagnosis_3: displayPrograms[2] ? displayPrograms[2].name : '',
+                    compatibility_3: displayPrograms[2] ? displayPrograms[2].fit_score : '',
                     diagnosis_4: displayPrograms[3] ? displayPrograms[3].name : '',
-                    diagnosis_5: displayPrograms[4] ? displayPrograms[4].name : ''
+                    compatibility_4: displayPrograms[3] ? displayPrograms[3].fit_score : '',
+                    diagnosis_5: displayPrograms[4] ? displayPrograms[4].name : '',
+                    compatibility_5: displayPrograms[4] ? displayPrograms[4].fit_score : ''
                 };
 
                 const response = await fetch(process.env.GOOGLE_SHEETS_WEBHOOK_URL, {
