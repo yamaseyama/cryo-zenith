@@ -219,6 +219,8 @@ app.post('/api/diagnose', async (req, res) => {
                     compatibility_5: displayPrograms[4] ? displayPrograms[4].fit_score : ''
                 };
 
+                console.log('[GAS DEBUG] Sending sheetData:', JSON.stringify(sheetData, null, 2));
+
                 const response = await fetch(process.env.GOOGLE_SHEETS_WEBHOOK_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
