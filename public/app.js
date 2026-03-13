@@ -184,8 +184,6 @@ document.addEventListener('DOMContentLoaded', () => {
             data.purposes.push(cb.value);
         });
 
-        console.log('Sending data:', data);
-
         try {
             // API Call
             const response = await fetch('/api/diagnose', {

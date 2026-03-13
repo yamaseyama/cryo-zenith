@@ -265,11 +265,26 @@ app.post('/api/diagnose', async (req, res) => {
             return res.json(cached);
         }
 
-        // 2. 全プログラム取得（stale/expiredは除外してスコアリングの前段で排除）
+        // 2. プログラム取得（SQL事前フィルタリング: H-4 パフォーマンス修正）
+        // scope='national' の全国案件 + ユーザーの都道府県にマッチする地方案件のみ取得
+        // SELECT * → 必要なカラムのみに絞り、転送データ量を削減
+        const userPrefecture = company.prefecture || '';
         const result = await pool.query(
-            'SELECT * FROM subsidy_programs WHERE is_active = 1 AND application_status NOT IN (\'stale\', \'expired\', \'closed\')'
+            `SELECT
+                id, name, type, scope, prefecture,
+                industry_tags, purpose_tags, employee_range_tags,
+                eligibility_text, benefit_text, amount_text,
+                official_url, application_status, freshness_status, last_verified_at
+            FROM subsidy_programs
+            WHERE is_active = 1
+              AND application_status NOT IN ('stale', 'expired', 'closed')
+              AND (
+                  scope = 'national'
+                  OR (scope = 'prefecture' AND prefecture ILIKE $1)
+              )`,
+            [`%${userPrefecture}%`]
         );
-        console.log(`[DIAGNOSE] Active programs fetched: ${result.rows.length} 件`);
+        console.log(`[DIAGNOSE] Pre-filtered programs: ${result.rows.length} 件 (prefecture: ${userPrefecture})`);
         const programs = result.rows.map(p => ({
             ...p,
             industry_tags: JSON.parse(p.industry_tags || '[]'),
