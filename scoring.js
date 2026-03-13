@@ -1,45 +1,86 @@
 /**
  * scoring.js - 補助金マッチングスコアリングロジック
  *
- * 修正ポイント（2026-03-13 地域・年度フィルタ完全堅牢化版）:
- * 1. 地域判定: DB に「新潟県 / 福井県」「北海道/北海道地方」のように複数県・スラッシュ区切りが
- *    存在するため、prefecture 文字列をパースして都道府県リストを抽出し、
- *    ユーザーの都道府県が含まれているかで判定する
- * 2. 年度フィルタ: 「令和〇年度」の〇を数値として比較し、
- *    現在年度(令和8年)よりも小さければ全て除外する汎用ロジックに変更
- * 3. 足切り判定は関数冒頭のブロックに集約し、加点ブロックには絶対に到達させない
- * 4. 最終スコアは Math.min(score, 100) で上限100点に制御
+ * 修正ポイント（2026-03-13 ホワイトリスト＋全角対応 最終版）:
+ *
+ * 【地域フィルタのホワイトリスト方式への変更】
+ * 旧: DB の prefecture フィールドから都道府県を抽出 → 抽出できなかった場合に
+ *     誤って「全国」扱いにしてしまいすり抜けが発生していた
+ * 新: prefecture フィールドに「全国」OR「ユーザーの都道府県名」が文字列として
+ *     含まれているかのみを確認する（contains check）。
+ *     どちらも含まれなければ問答無用で return 0。
+ *
+ * 【年度フィルタの全角数字・漢数字対応】
+ * 旧: /令和(\d+)年/ → \d はASCII数字のみ認識、全角数字（４, ６）を見逃していた
+ *     → 「令和４年度」「令和６年度（補正）」がすり抜けていた
+ * 新: 全角数字・漢数字（元〜十）を包括したリスト + 変換ロジックで検出する
  */
 
 const DEBUG = process.env.SCORING_DEBUG === 'true';
 
-// ===== 定数 =====
-// 現在の和暦年（令和8年 = 2026年 - 2018年 = 8年）
-// ※ 当年度よりも数字が小さい令和n年・平成n年は全て除外
+// 現在の令和年（2026年 = 令和8年）
+// ★ 必ず毎年更新すること
 const CURRENT_REIWA_YEAR = 8;
 
-// 都道府県一覧（DB の prefecture 文字列からここに含まれる文字列を抽出する）
-const ALL_PREFECTURES = [
-    '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
-    '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
-    '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県',
-    '岐阜県', '静岡県', '愛知県', '三重県',
-    '滋賀県', '京都府', '大阪府', '兵庫県', '奈良県', '和歌山県',
-    '鳥取県', '島根県', '岡山県', '広島県', '山口県',
-    '徳島県', '香川県', '愛媛県', '高知県',
-    '福岡県', '佐賀県', '長崎県', '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県'
-];
+// 全角数字 → 半角数字 変換マップ
+const ZEN_TO_HAN = { '０':0,'１':1,'２':2,'３':3,'４':4,'５':5,'６':6,'７':7,'８':8,'９':9 };
+
+// 令和の漢数字 → 数値 変換マップ（元年〜十年まで対応）
+const KANJI_REIWA = {
+    '元':1,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10,
+    '十一':11,'十二':12
+};
 
 /**
- * DB の prefecture フィールド文字列から、含まれる都道府県リストを抽出する
- * 例: "新潟県 / 福井県 / 富山県/石川県" → ["新潟県","福井県","富山県","石川県"]
- * 例: "北海道/北海道地方" → ["北海道"]
- * 例: "全国" → [] (全国扱い)
- * 例: "東京都" → ["東京都"]
+ * 文字列中の「令和○年」「平成○年」を全て検出し、
+ * 現在年度より過去の年度が含まれるか確認する
  */
-function extractPrefectures(prefectureField) {
-    if (!prefectureField) return [];
-    return ALL_PREFECTURES.filter(pref => prefectureField.includes(pref));
+function containsOldYear(text) {
+    if (!text) return false;
+
+    // ① 「令和X年」（X = ASCII数字）を検出
+    const reiwaAscii = [...text.matchAll(/令和(\d+)年/g)];
+    for (const m of reiwaAscii) {
+        const year = parseInt(m[1], 10);
+        if (year < CURRENT_REIWA_YEAR) {
+            if (DEBUG) console.log(`  [OLD YEAR] 令和${year}年（ASCII）を検出`);
+            return true;
+        }
+    }
+
+    // ② 「令和Ｘ年」（X = 全角数字）を検出
+    const reiwaZen = [...text.matchAll(/令和([０-９]+)年/g)];
+    for (const m of reiwaZen) {
+        const year = [...m[1]].reduce((acc, c) => acc * 10 + (ZEN_TO_HAN[c] ?? 0), 0);
+        if (year > 0 && year < CURRENT_REIWA_YEAR) {
+            if (DEBUG) console.log(`  [OLD YEAR] 令和${m[1]}年（全角）を検出`);
+            return true;
+        }
+    }
+
+    // ③ 「令和X年」（X = 漢数字：元〜十二）を検出
+    const reiwaKanji = [...text.matchAll(/令和(十二|十一|[元一二三四五六七八九十])年/g)];
+    for (const m of reiwaKanji) {
+        const year = KANJI_REIWA[m[1]];
+        if (year !== undefined && year < CURRENT_REIWA_YEAR) {
+            if (DEBUG) console.log(`  [OLD YEAR] 令和${m[1]}年（漢数字）を検出`);
+            return true;
+        }
+    }
+
+    // ④ 平成はすべて過去（年数を問わず除外）
+    if (/平成[元0-9０-９一二三四五六七八九十百]+年/.test(text)) {
+        if (DEBUG) console.log(`  [OLD YEAR] 平成年を検出`);
+        return true;
+    }
+
+    // ⑤ 公募終了文言
+    if (/公募は締め切り|募集終了|受付終了/.test(text)) {
+        if (DEBUG) console.log(`  [OLD YEAR] 公募終了文言を検出`);
+        return true;
+    }
+
+    return false;
 }
 
 /**
@@ -59,38 +100,6 @@ function safeParseArray(val) {
 }
 
 /**
- * テキストに過去の年度（令和・平成）が含まれているか確認する
- * 現在年度（令和8年）より前の数字が含まれれば true を返す
- */
-function containsOldYear(text) {
-    if (!text) return false;
-
-    // 令和n年 を検出
-    const reiwaMatches = text.matchAll(/令和(\d+)年/g);
-    for (const m of reiwaMatches) {
-        const year = parseInt(m[1], 10);
-        if (year < CURRENT_REIWA_YEAR) {
-            if (DEBUG) console.log(`  [OLD YEAR] 令和${year}年 を検出`);
-            return true;
-        }
-    }
-
-    // 平成n年 はすべて過去
-    if (/平成\d+年/.test(text)) {
-        if (DEBUG) console.log(`  [OLD YEAR] 平成年 を検出`);
-        return true;
-    }
-
-    // 「公募は締め切り」「募集終了」なども除外
-    if (/公募は締め切り|募集終了|受付終了/.test(text)) {
-        if (DEBUG) console.log(`  [OLD YEAR] 公募終了文言 を検出`);
-        return true;
-    }
-
-    return false;
-}
-
-/**
  * calculateScore
  * @param {Object} company - 企業情報
  * @param {Object} program - 制度データ（DB 行）
@@ -107,11 +116,13 @@ function calculateScore(company, program) {
     const eligibilityText = program.eligibility_text || '';
     const status          = (program.application_status || '').toLowerCase();
     const freshness       = (program.freshness_status   || '').toLowerCase();
+
+    // ★ ホワイトリスト方式: prefecture フィールドを文字列としてそのまま使う
     const prefectureField = program.prefecture || '';
 
     if (DEBUG) {
         console.log(`\n[SCORE DEBUG] === ${program.id}: ${programName.substring(0, 40)} ===`);
-        console.log(`  prefecture field: "${prefectureField}" | company.prefecture: "${company.prefecture}"`);
+        console.log(`  prefecture: "${prefectureField}" | company.prefecture: "${company.prefecture}"`);
         console.log(`  status: "${status}" | freshness: "${freshness}"`);
     }
 
@@ -129,7 +140,7 @@ function calculateScore(company, program) {
         return { score: 0, reasons: ['情報の鮮度が確認できないため対象外です'] };
     }
 
-    // --- 1-B: 過去年度テキストチェック（名称・本文すべてをスキャン）---
+    // --- 1-B: 過去年度テキストチェック（ASCII / 全角 / 漢数字の全てに対応）---
     if (
         containsOldYear(programName) ||
         containsOldYear(benefitText) ||
@@ -139,20 +150,19 @@ function calculateScore(company, program) {
         return { score: 0, reasons: ['過去年度の情報のため対象外です'] };
     }
 
-    // --- 1-C: 地域チェック（堅牢化版） ---
-    // prefecture フィールドから都道府県を全て抽出
-    const targetPrefectures = extractPrefectures(prefectureField);
-    const isNational = prefectureField.includes('全国') || targetPrefectures.length === 0;
+    // --- 1-C: 地域チェック（ホワイトリスト方式）---
+    // 条件A: prefectureField に「全国」が含まれる → 通過
+    // 条件B: prefectureField に company.prefecture（例: "沖縄県"）が含まれる → 通過
+    // それ以外（空文字・市区町村名のみ・他府県名のみ）→ 即 return 0
+    const isNational         = prefectureField.includes('全国');
+    const isMatchingPref     = company.prefecture && prefectureField.includes(company.prefecture);
 
-    if (!isNational) {
-        // 地域限定案件: 抽出した都道府県リストに company.prefecture が含まれているか確認
-        if (!targetPrefectures.includes(company.prefecture)) {
-            if (DEBUG) console.log(`  [REJECT] 地域不一致: 対象[${targetPrefectures.join(',')}] vs ユーザー[${company.prefecture}]`);
-            return {
-                score: 0,
-                reasons: [`${targetPrefectures.join('・') || '特定地域'}限定の制度のため、所在地が一致しません`]
-            };
-        }
+    if (!isNational && !isMatchingPref) {
+        if (DEBUG) console.log(`  [REJECT] 地域ホワイトリスト不一致: prefecture="${prefectureField}" / company="${company.prefecture}"`);
+        return {
+            score: 0,
+            reasons: ['対象地域が一致しません（地域限定または対象外）']
+        };
     }
 
     // --- 1-D: 目的チェック ---
@@ -190,7 +200,7 @@ function calculateScore(company, program) {
         reasons.push('全国対象の制度です');
     } else {
         score += 25;
-        reasons.push(`${targetPrefectures.join('・')}の制度です（地域一致）`);
+        reasons.push(`${company.prefecture}対象の制度です（地域一致）`);
     }
 
     // 目的マッチボーナス
@@ -201,8 +211,7 @@ function calculateScore(company, program) {
         const matchingPurposes = companyPurposes.filter(p => purposeTags.includes(p));
         const nicheTargets = ['it_implementation', 'productivity', 'new_product', 'startup', 'branding'];
         const nicheCount = matchingPurposes.filter(p => nicheTargets.includes(p)).length;
-        const purposeScore = 15 + (nicheCount * 10);
-        score += Math.min(purposeScore, 35);
+        score += Math.min(15 + nicheCount * 10, 35);
         reasons.push(`目的(${matchingPurposes.map(m => translatePurpose(m)).join(', ')})が合致します`);
     }
 
@@ -252,7 +261,7 @@ function calculateScore(company, program) {
     return { score, reasons };
 }
 
-// Helper: 従業員数から規模タグへ変換
+// Helper: 従業員数 → 規模タグ
 function getCompanyScale(count) {
     const n = parseInt(count, 10);
     if (!n || n <= 5) return 'micro';
@@ -261,7 +270,7 @@ function getCompanyScale(count) {
     return 'large';
 }
 
-// Helper: 業種タグの日本語変換
+// Helper: 業種タグ → 日本語
 function translateIndustry(tag) {
     const map = {
         manufacturing: '製造業', retail: '小売業', service: 'サービス業',
@@ -271,7 +280,7 @@ function translateIndustry(tag) {
     return map[tag] || tag;
 }
 
-// Helper: 目的タグの日本語変換
+// Helper: 目的タグ → 日本語
 function translatePurpose(tag) {
     const map = {
         'productivity': '生産性向上', 'new_product': '新製品・新サービス開発',
