@@ -5,9 +5,23 @@
         "type": "subsidy",
         "scope": "national",
         "prefecture": "全国",
-        "industry_tags": ["all"],
-        "purpose_tags": ["it_implementation", "productivity", "new_product", "business_model", "startup", "branding", "sales_expansion"],
-        "employee_range_tags": ["micro", "small", "medium"],
+        "industry_tags": [
+            "all"
+        ],
+        "purpose_tags": [
+            "it_implementation",
+            "productivity",
+            "new_product",
+            "business_model",
+            "startup",
+            "branding",
+            "sales_expansion"
+        ],
+        "employee_range_tags": [
+            "micro",
+            "small",
+            "medium"
+        ],
         "eligibility_text": "中小企業・小規模事業者がITツール（ソフトウェア、クラウド等）を導入する費用を補助。業務効率化・DX推進を支援します。",
         "benefit_text": "補助率1/2〜3/4（通常枠・デジタル化基盤導入類型等）",
         "amount_text": "上限450万円（類型により異なる）",
@@ -18,7 +32,6 @@
         "notes": "手動追加データ: IT導入補助金（経済産業省・中小企業庁）"
     },
     {
-
         "id": "jg-S-00008289",
         "name": "【総務省】スタートアップ創出型萌芽的研究開発支援事業",
         "type": "subsidy",
@@ -53,7 +66,7 @@
             "IT"
         ],
         "purpose_tags": [
-            "career_up"
+            "hiring"
         ],
         "employee_range_tags": [
             "all"
@@ -221,7 +234,7 @@
             "all"
         ],
         "purpose_tags": [
-            "career_up"
+            "hiring"
         ],
         "employee_range_tags": [
             "all"
@@ -509,7 +522,6 @@
             "all"
         ],
         "purpose_tags": [
-            "career_up",
             "hiring"
         ],
         "employee_range_tags": [
@@ -536,7 +548,7 @@
             "manufacturing"
         ],
         "purpose_tags": [
-            "career_up"
+            "hiring"
         ],
         "employee_range_tags": [
             "micro",
@@ -562,7 +574,7 @@
             "all"
         ],
         "purpose_tags": [
-            "career_up"
+            "hiring"
         ],
         "employee_range_tags": [
             "micro",
@@ -588,7 +600,7 @@
             "all"
         ],
         "purpose_tags": [
-            "career_up"
+            "hiring"
         ],
         "employee_range_tags": [
             "micro",
@@ -1842,7 +1854,7 @@
             "all"
         ],
         "purpose_tags": [
-            "career_up"
+            "hiring"
         ],
         "employee_range_tags": [
             "all"
@@ -2322,7 +2334,6 @@
             "all"
         ],
         "purpose_tags": [
-            "career_up",
             "hiring"
         ],
         "employee_range_tags": [
@@ -2662,7 +2673,7 @@
             "restaurant"
         ],
         "purpose_tags": [
-            "career_up"
+            "hiring"
         ],
         "employee_range_tags": [
             "all"
@@ -2710,7 +2721,7 @@
             "all"
         ],
         "purpose_tags": [
-            "career_up"
+            "hiring"
         ],
         "employee_range_tags": [
             "all"
@@ -2806,7 +2817,7 @@
             "all"
         ],
         "purpose_tags": [
-            "career_up"
+            "hiring"
         ],
         "employee_range_tags": [
             "all"
@@ -2932,7 +2943,7 @@
             "IT"
         ],
         "purpose_tags": [
-            "career_up"
+            "hiring"
         ],
         "employee_range_tags": [
             "all"
@@ -3178,7 +3189,6 @@
             "all"
         ],
         "purpose_tags": [
-            "career_up",
             "hiring"
         ],
         "employee_range_tags": [
@@ -3421,7 +3431,6 @@
             "IT"
         ],
         "purpose_tags": [
-            "career_up",
             "hiring"
         ],
         "employee_range_tags": [
@@ -3716,7 +3725,7 @@
             "all"
         ],
         "purpose_tags": [
-            "career_up"
+            "hiring"
         ],
         "employee_range_tags": [
             "all"
@@ -3764,7 +3773,6 @@
             "IT"
         ],
         "purpose_tags": [
-            "career_up",
             "hiring"
         ],
         "employee_range_tags": [
@@ -3909,7 +3917,6 @@
             "all"
         ],
         "purpose_tags": [
-            "career_up",
             "hiring"
         ],
         "employee_range_tags": [
@@ -4440,7 +4447,6 @@
             "all"
         ],
         "purpose_tags": [
-            "career_up",
             "hiring"
         ],
         "employee_range_tags": [

@@ -18,13 +18,13 @@ const INDUSTRY_MAP = {
     '運輸業': 'logistics', '教育': 'education', '金融業': 'finance', 'その他': 'other'
 };
 
-// 目的マッピング
+// 目的マッピング（フロント側の定義に完全一致させる）
 const PURPOSE_MAP = {
-    '設備投資がしたい': 'productivity', '新たな事業を始めたい': 'business_model',
+    '設備投資がしたい': 'productivity', '新たな事業を始めたい': 'new_product',
     '新たな製品やサービスを作りたい': 'new_product', '研究開発を行いたい': 'new_product',
-    'ブランディング・PR活動をしたい': 'branding', '海外へ展開したい': 'sales_expansion',
-    '販路を拡大したい': 'sales_expansion', 'IT化・DXを図りたい': 'it_implementation',
-    '人材育成を行いたい': 'career_up', '雇用・職場環境を改善したい': 'hiring',
+    'ブランディング・PR活動をしたい': 'marketing', '海外へ展開したい': 'marketing',
+    '販路を拡大したい': 'marketing', 'IT化・DXを図りたい': 'it_implementation',
+    '人材育成を行いたい': 'hiring', '雇用・職場環境を改善したい': 'hiring',
     '創業・起業をしたい': 'startup'
 };
 
@@ -81,18 +81,16 @@ async function fetchJGrants() {
 
     for (const keyword of keywords) {
         console.log(`📡 キーワード「${keyword}」で検索中...`);
-        for (const acceptance of [1, 0]) {
-            const url = `${BASE_URL}/subsidies?keyword=${encodeURIComponent(keyword)}&sort=created_date&order=DESC&acceptance=${acceptance}&limit=100`;
-            try {
-                const response = await fetch(url);
-                if (!response.ok) continue;
-                const data = await response.json();
-                (data.result || []).forEach(item => allSubsidies.set(item.id, item));
-            } catch (err) {
-                console.error(`  ❌ 検索エラー: ${err.message}`);
-            }
-            await sleep(300);
+        const url = `${BASE_URL}/subsidies?keyword=${encodeURIComponent(keyword)}&sort=created_date&order=DESC&acceptance=1&limit=100`;
+        try {
+            const response = await fetch(url);
+            if (!response.ok) continue;
+            const data = await response.json();
+            (data.result || []).forEach(item => allSubsidies.set(item.id, item));
+        } catch (err) {
+            console.error(`  ❌ 検索エラー: ${err.message}`);
         }
+        await sleep(300);
     }
 
     const subsidyArray = Array.from(allSubsidies.entries());
@@ -115,12 +113,7 @@ async function fetchJGrants() {
                 if (!detail) return;
 
                 const internalId = `jg-${detail.name || id}`;
-                let status = 'open';
-                if (detail.acceptance === 0) {
-                    const startDate = new Date(detail.acceptance_start_datetime);
-                    if (startDate > new Date()) status = 'upcoming';
-                    else return;
-                }
+                const status = 'open'; // acceptance=1 で取得済みのため一律「公募中」
 
                 fetchedPrograms.push({
                     id: internalId,
