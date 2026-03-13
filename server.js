@@ -292,10 +292,37 @@ app.post('/api/diagnose', async (req, res) => {
             return { ...p, fit_score: score, reasons };
         });
 
-        // 4. ソート & 上位抽出
-        const rankedPrograms = scoredPrograms
-            .sort((a, b) => b.fit_score - a.fit_score)
-            .slice(0, 10);
+        // 4-A. 0点フィルタ: 全く対象外の案件はリストに載せない
+        const nonZeroPrograms = scoredPrograms.filter(p => p.fit_score > 0);
+
+        // 4-B. 名寄せ（重複排除）: 同じ補助金の複数回次から最高スコアの1件のみを残す
+        const DEDUP_GROUPS = [
+            'ものづくり・商業・サービス',
+            'IT導入補助金',
+        ];
+        const dedupedPrograms = (() => {
+            const result = [];
+            const usedGroups = new Set();
+            // スコア降順でソート済みのため先頭のものが「最高スコア」
+            const sorted = [...nonZeroPrograms].sort((a, b) => b.fit_score - a.fit_score);
+            for (const p of sorted) {
+                let grouped = false;
+                for (const keyword of DEDUP_GROUPS) {
+                    if (p.name.includes(keyword)) {
+                        if (usedGroups.has(keyword)) {
+                            grouped = true; // 既に代表を選出済み → スキップ
+                            break;
+                        }
+                        usedGroups.add(keyword); // 初登場 → 代表として採用
+                    }
+                }
+                if (!grouped) result.push(p);
+            }
+            return result;
+        })();
+
+        // 4-C. 上位10件抽出（LLM・スプレッドシート用）
+        const rankedPrograms = dedupedPrograms.slice(0, 10);
 
         // 5. LLM解説生成
         const topProgramsForLLM = rankedPrograms.slice(0, 5);
