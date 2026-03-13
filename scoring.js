@@ -301,6 +301,10 @@ function calculateScore(company, program) {
     const scope           = (program.scope              || '').toLowerCase();
     const prefectureField = program.prefecture || '';
 
+    // 特別枠フラグ（足切り判定より前に定義する）
+    const isITSubsidy   = programName.includes('IT導入');
+    const isMonoSubsidy = programName.includes('ものづくり');
+
     if (DEBUG) {
         console.log(`\n[SCORE DEBUG] === ${program.id}: ${programName.substring(0, 40)} ===`);
         console.log(`  scope: "${scope}" | prefecture: "${prefectureField.substring(0, 60)}..."`);
@@ -379,7 +383,7 @@ function calculateScore(company, program) {
         }
     }
 
-    // 1-D: 目的チェック
+    // 1-D: 目的チェック（特別枠は目的不一致でもパス）
     if (purposeTags.length > 0) {
         if (companyPurposes.length === 0) {
             if (DEBUG) console.log(`  [REJECT] 目的未入力`);
@@ -387,8 +391,12 @@ function calculateScore(company, program) {
         }
         const matchingPurposes = companyPurposes.filter(p => purposeTags.includes(p));
         if (matchingPurposes.length === 0) {
-            if (DEBUG) console.log(`  [REJECT] 目的不一致`);
-            return { score: 0, reasons: ['選択された目的に合致していません'] };
+            // 特別枠（IT導入・ものづくり）は目的不一致でも略して兑除がない
+            if (!isITSubsidy && !isMonoSubsidy) {
+                if (DEBUG) console.log(`  [REJECT] 目的不一致`);
+                return { score: 0, reasons: ['選択された目的に合致していません'] };
+            }
+            if (DEBUG) console.log(`  [FEATURED PASS] 目的不一致だが特別枠として通過`);
         }
     }
 
@@ -457,6 +465,32 @@ function calculateScore(company, program) {
     if (program.last_verified_at) {
         const days = (new Date() - new Date(program.last_verified_at)) / (1000 * 60 * 60 * 24);
         if (days <= 90) { score += 5; reasons.push('直近で確認された最新情報です'); }
+    }
+
+    // ===========================================================
+    // ★ STEP 2.5: 特別枠の最低保証スコアと適合理由の付与
+    // ===========================================================
+    {
+        const matchedP = companyPurposes.filter(p => purposeTags.includes(p));
+        const isFeaturedPass = purposeTags.length > 0 && matchedP.length === 0;
+
+        if (isITSubsidy) {
+            if (isFeaturedPass) {
+                reasons.push('「特別提案」今後の事業成長・業務効率化において、全業種でITツールやAIの導入が推奨されるため');
+            }
+            if (score < 60) {
+                score = 60; // IT導入補助金: 最低保証 60 点
+                if (DEBUG) console.log(`  [FEATURED] IT導入補助金: スコアを 60 点に引き上げ`);
+            }
+        } else if (isMonoSubsidy) {
+            if (isFeaturedPass) {
+                reasons.push('【特別提案】より抜本的な事業変革や、独自のシステム開発・設備投資を目指す場合の有力な選択肢となるため');
+            }
+            if (score < 45) {
+                score = 45; // ものづくり補助金: 最低保証 45 点
+                if (DEBUG) console.log(`  [FEATURED] ものづくり補助金: スコアを 45 点に引き上げ`);
+            }
+        }
     }
 
     // ===========================================================
