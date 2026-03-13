@@ -299,6 +299,7 @@ app.post('/api/diagnose', async (req, res) => {
         const DEDUP_GROUPS = [
             'ものづくり・商業・サービス',
             'IT導入補助金',
+            '小規模事業者持続化補助金', // 三大補助金③: 複数公募回（第◯回等）を名寄せ
         ];
         const dedupedPrograms = (() => {
             const result = [];

@@ -309,9 +309,10 @@ function calculateScore(company, program) {
 
     // 1-D: 目的チェック
     //   ★ バイパスするのは「目的マッチ」の局面のみ。
-    //   ★ 地域・年度・機槟の足切りはバイパスしない（上の STEP 1-A、1-B、1-B2、1-C でわかりやすく変わらず return 0 済み）
-    const isITSubsidy   = programName.includes('IT導入補助金');
-    const isMonoSubsidy = programName.includes('ものづくり・商業・サービス');
+    //   ★ 地域・年度・ステータスの足切りはバイパスしない（STEP 1-A、1-B、1-B2、1-C で return 0 済み）
+    const isITSubsidy       = programName.includes('IT導入補助金');        // 国の三大補助金①
+    const isMonoSubsidy     = programName.includes('ものづくり・商業・サービス'); // 国の三大補助金②
+    const isJizokukaSubsidy = programName.includes('小規模事業者持続化補助金');  // 国の三大補助金③
 
     if (DEBUG) {
         console.log(`\n[SCORE DEBUG] === ${program.id}: ${programName.substring(0, 40)} ===`);
@@ -399,12 +400,12 @@ function calculateScore(company, program) {
         }
         const matchingPurposes = companyPurposes.filter(p => purposeTags.includes(p));
         if (matchingPurposes.length === 0) {
-            // 特別枠（IT導入・ものづくり）は目的不一致でも略して兑除がない
-            if (!isITSubsidy && !isMonoSubsidy) {
+            // 特別枠（IT導入・ものづくり・持続化）は目的不一致でもパス
+            if (!isITSubsidy && !isMonoSubsidy && !isJizokukaSubsidy) {
                 if (DEBUG) console.log(`  [REJECT] 目的不一致`);
                 return { score: 0, reasons: ['選択された目的に合致していません'] };
             }
-            if (DEBUG) console.log(`  [FEATURED PASS] 目的不一致だが特別枠として通過`);
+            if (DEBUG) console.log(`  [FEATURED PASS] 目的不一致だが特別枠（三大補助金）として通過`);
         }
     }
 
@@ -484,11 +485,19 @@ function calculateScore(company, program) {
 
         if (isITSubsidy) {
             if (isFeaturedPass) {
-                reasons.push('「特別提案」今後の事業成長・業務効率化において、全業種でITツールやAIの導入が推奨されるため');
+                reasons.push('【特別提案】今後の事業成長・業務効率化において、全業種でITツールやAIの導入が推奨されるため');
             }
             if (score < 60) {
                 score = 60; // IT導入補助金: 最低保証 60 点
                 if (DEBUG) console.log(`  [FEATURED] IT導入補助金: スコアを 60 点に引き上げ`);
+            }
+        } else if (isJizokukaSubsidy) {
+            if (isFeaturedPass) {
+                reasons.push('【特別提案】販路開拓やPR、店舗改装など、小規模事業者の幅広い取り組みを支援する最も使い勝手の良い制度のため');
+            }
+            if (score < 50) {
+                score = 50; // 小規模事業者持続化補助金: 最低保証 50 点
+                if (DEBUG) console.log(`  [FEATURED] 持続化補助金: スコアを 50 点に引き上げ`);
             }
         } else if (isMonoSubsidy) {
             if (isFeaturedPass) {
