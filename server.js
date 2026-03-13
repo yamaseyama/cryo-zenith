@@ -10,7 +10,24 @@ const port = process.env.PORT || 3000;
 // ========================================
 // Middleware（スペック強化対応）
 // ========================================
-app.use(cors());
+
+// 「セキュリティ修正 H-2」: CORS を安全なホワイトリスト方式に変更
+const ALLOWED_ORIGINS = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    process.env.PRODUCTION_URL
+].filter(Boolean);
+
+app.use(cors({
+    origin: (origin, callback) => {
+        // curl や healthcheck など origin なしのリクエストは許可（Vercel内部連携等）
+        if (!origin) return callback(null, true);
+        if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+        return callback(new Error(`CORS: ${origin} is not allowed`), false);
+    },
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 app.use(express.json({ limit: '1mb' })); // リクエストサイズ制限
 app.use(express.static('public'));
 
@@ -399,9 +416,20 @@ app.get('/api/health', async (req, res) => {
     }
 });
 
-// キャッシュクリアエンドポイント（デバッグ・メンテナンス用）
-// 修正理由: スコアリングロジック変更後に古いキャッシュを手動クリアできるようにする
+// 「セキュリティ修正 H-1」: 管理 API に Bearer トークン認証を追加
 app.post('/api/admin/clear-cache', (req, res) => {
+    const authHeader = req.headers['authorization'] || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const expectedToken = process.env.ADMIN_SECRET_KEY;
+
+    if (!expectedToken) {
+        // ADMIN_SECRET_KEY が未設定の場合はエンドポイント自体を封鎖
+        return res.status(503).json({ error: 'Admin endpoint is not configured' });
+    }
+    if (!token || token !== expectedToken) {
+        return res.status(401).json({ error: '認証に失敗しました' });
+    }
+
     const sizeBefore = diagnosisCache.size;
     diagnosisCache.cache.clear();
     console.log(`[ADMIN] Cache cleared. Before: ${sizeBefore} entries.`);
