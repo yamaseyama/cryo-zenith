@@ -202,6 +202,12 @@ function containsOldYear(text) {
         if (DEBUG) console.log(`  [OLD YEAR] 平成年を検出`);
         return true;
     }
+    // ―― 追加：西暦 2020、2021、2022、2023、2024、2025 ――
+    // Jグランツ等に「2023年募集」などの形式で残っている場合がある
+    if (/202[0-5]年/.test(text)) {
+        if (DEBUG) console.log(`  [OLD YEAR] 西暦2020-2025年を検出`);
+        return true;
+    }
     // ── 既存：公募終了文言 ──
     if (/公募は締め切り|募集終了|受付終了/.test(text)) {
         if (DEBUG) console.log(`  [OLD YEAR] 公募終了文言を検出`);
@@ -301,7 +307,9 @@ function calculateScore(company, program) {
     const scope           = (program.scope              || '').toLowerCase();
     const prefectureField = program.prefecture || '';
 
-    // 特別枠フラグ（足切り判定より前に定義する）
+    // 1-D: 目的チェック
+    //   ★ バイパスするのは「目的マッチ」の局面のみ。
+    //   ★ 地域・年度・機槟の足切りはバイパスしない（上の STEP 1-A、1-B、1-B2、1-C でわかりやすく変わらず return 0 済み）
     const isITSubsidy   = programName.includes('IT導入補助金');
     const isMonoSubsidy = programName.includes('ものづくり・商業・サービス');
 
