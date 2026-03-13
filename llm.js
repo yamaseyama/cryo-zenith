@@ -1,8 +1,17 @@
 const OpenAI = require('openai');
 
 const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY || 'dummy_key', // APIキーがない場合もエラーで落ちないように
+    apiKey: process.env.OPENAI_API_KEY || 'dummy_key',
 });
+
+/**
+ * M-3: トークン肥大化対策 — 長いテキストを切り詰めるヘルパー
+ * LLMに渡すテキストが長すぎるとトークンコストが蹍上がるため、各フィールドを maxLen 文字以内に制限する
+ */
+function truncate(text, maxLen = 150) {
+    if (!text) return '詳細は公式ページをご確認ください';
+    return text.length > maxLen ? text.slice(0, maxLen) + '…' : text;
+}
 
 /**
  * generateExplanation
@@ -31,12 +40,12 @@ async function generateExplanation(company, programs) {
 - 従業員数: ${company.employees_count}
 - 目的: ${company.purposes.join(', ')}
 
-# 推奨制度リスト (上位のみ)
+# 推奨制度リスト (上位のみ / 各フィールドは要約済み)
 ${programs.map((p, index) => `
-${index + 1}. ${p.name}
-   - 対象: ${p.eligibility_text}
-   - メリット: ${p.benefit_text}
-   - スコア判定理由: ${p.reasons.join(', ')}
+${index + 1}. [ID:${p.id}] ${p.name}
+   - 対象: ${truncate(p.eligibility_text, 150)}
+   - メリット: ${truncate(p.benefit_text, 150)}
+   - 適合理由: ${p.reasons.slice(0, 3).join('、')}
 `).join('\n')}
 
 # 出力形式 (JSON)
@@ -53,6 +62,7 @@ ${index + 1}. ${p.name}
     ]
 }
 `;
+
 
         const completion = await openai.chat.completions.create({
             messages: [{ role: "system", content: "You are a helpful assistant that outputs JSON." }, { role: "user", content: prompt }],
@@ -103,11 +113,10 @@ async function generateChatResponse(program, question) {
 # 対象の補助金情報
 - 名称: ${program.name}
 - 種類: ${program.type === 'grant' ? '助成金' : '補助金'}
-- 対象者について: ${program.eligibility_text}
-- 補助内容（メリット）: ${program.benefit_text}
+- 対象者について: ${truncate(program.eligibility_text, 200)}
+- 補助内容（メリット）: ${truncate(program.benefit_text, 200)}
 - 補助上限額: ${program.amount_text}
 - 公式URL: ${program.official_url}
-- AIによる判定理由: ${program.why_fit_llm || program.reasons?.join('。') || 'なし'}
 
 # ユーザーからの質問:
 ${question}
