@@ -150,33 +150,34 @@ app.post('/api/diagnose', async (req, res) => {
         console.log('--- New Lead Received ---');
         console.log(`Company: ${company.company_name}`);
 
-        try {
-            const insertQuery = `
-                INSERT INTO leads (
-                    company_name, contact_person, phone, email,
-                    prefecture, city, industry, employees_count, sales_amount,
-                    purposes, ip_address
-                ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-                )
-            `;
-
-            await pool.query(insertQuery, [
-                company.company_name,
-                company.contact_person,
-                company.phone,
-                company.email,
-                company.prefecture,
-                company.city,
-                company.industry,
-                company.employees_count,
-                company.sales_amount,
-                JSON.stringify(company.purposes || []),
-                req.ip
-            ]);
-            console.log('Lead saved to database successfully.');
-        } catch (dbErr) {
-            console.error('Failed to save lead to database:', dbErr);
+        // M-4: リード保存リトライ（最大2回 / 失敗時は CRITICAL ログで可視化）
+        let leadSaveSuccess = false;
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+                await pool.query(
+                    `INSERT INTO leads (
+                        company_name, contact_person, phone, email,
+                        prefecture, city, industry, employees_count, sales_amount,
+                        purposes, ip_address
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                    [
+                        company.company_name, company.contact_person, company.phone, company.email,
+                        company.prefecture, company.city, company.industry, company.employees_count,
+                        company.sales_amount, JSON.stringify(company.purposes || []), req.ip
+                    ]
+                );
+                console.log(`[LEAD] Saved successfully (attempt ${attempt}).`);
+                leadSaveSuccess = true;
+                break;
+            } catch (dbErr) {
+                console.error(`[LEAD][CRITICAL] Save failed (attempt ${attempt}/2):`, dbErr.message);
+                if (attempt < 2) await new Promise(r => setTimeout(r, 500));
+            }
+        }
+        if (!leadSaveSuccess) {
+            // どのリードが失われたかを特定できるよう最低限の情報をログに残す
+            console.error(`[LEAD][CRITICAL] Lead LOST: company=${company.company_name} | email=${company.email}`);
+            res.setHeader('X-Lead-Save-Status', 'failed');
         }
 
         console.log('-------------------------');
@@ -265,10 +266,12 @@ app.post('/api/diagnose', async (req, res) => {
             return res.json(cached);
         }
 
-        // 2. プログラム取得（SQL事前フィルタリング: H-4 パフォーマンス修正）
-        // scope='national' の全国案件 + ユーザーの都道府県にマッチする地方案件のみ取得
-        // SELECT * → 必要なカラムのみに絞り、転送データ量を削減
-        const userPrefecture = company.prefecture || '';
+        // 懸念点A: prefecture が空/未定義の場合は全件マッチを防ぐためエラーで弾く
+        const userPrefecture = company.prefecture;
+        if (!userPrefecture || userPrefecture.trim() === '') {
+            return res.status(400).json({ error: '所在地（都道府県）は必須です' });
+        }
+
         const result = await pool.query(
             `SELECT
                 id, name, type, scope, prefecture,

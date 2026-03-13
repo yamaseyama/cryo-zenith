@@ -6,6 +6,14 @@ const client = new Client({
 });
 
 const initDB = async () => {
+    // 🔴 M-5: 本番環境での誤実行を防ぐガード（NODE_ENV=production では即終了）
+    if (process.env.NODE_ENV === 'production') {
+        console.error('❌ [FATAL] db:reset は本番環境では実行できません。');
+        console.error('   開発環境 (NODE_ENV=development) でのみ実行可能です。');
+        console.error('   本番 DB を初期化する場合は Supabase のダッシュボードから直接操作してください。');
+        process.exit(1);
+    }
+
     try {
         await client.connect();
         console.log('データベース接続完了 (PostgreSQL)');
