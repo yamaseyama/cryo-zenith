@@ -188,12 +188,7 @@ app.post('/api/diagnose', async (req, res) => {
 
         // --- Webhook送信用の共通関数 ---
         const postToGoogleSheets = async (targetCompany, displayPrograms) => {
-            console.log('[GAS DEBUG] postToGoogleSheets called.');
-            console.log('[GAS DEBUG] GOOGLE_SHEETS_WEBHOOK_URL exists:', !!process.env.GOOGLE_SHEETS_WEBHOOK_URL);
-            if (!process.env.GOOGLE_SHEETS_WEBHOOK_URL) {
-                console.log('[GAS DEBUG] No GOOGLE_SHEETS_WEBHOOK_URL set, skipping.');
-                return;
-            }
+            if (!process.env.GOOGLE_SHEETS_WEBHOOK_URL) return;
             try {
                 const industryMap = {
                     manufacturing: '製造業', retail: '小売業', service: 'サービス業',
@@ -237,8 +232,6 @@ app.post('/api/diagnose', async (req, res) => {
                     compatibility_5: displayPrograms[4] ? displayPrograms[4].fit_score : ''
                 };
 
-                console.log('[GAS DEBUG] Sending sheetData:', JSON.stringify(sheetData, null, 2));
-
                 const response = await fetch(process.env.GOOGLE_SHEETS_WEBHOOK_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -259,10 +252,8 @@ app.post('/api/diagnose', async (req, res) => {
         };
 
         if (cached) {
-            console.log('[GAS DEBUG] Cache hit! About to call postToGoogleSheets...');
             // キャッシュヒット時もスプレッドシートへの記録（リード追加）は実行する
             await postToGoogleSheets(company, cached.programs);
-            console.log('[GAS DEBUG] Cache hit path - postToGoogleSheets completed.');
             return res.json(cached);
         }
 

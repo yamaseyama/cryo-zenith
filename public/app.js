@@ -339,14 +339,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // L-4: XSS 対策 — LLM返答を innerHTML に直接挿入せず createTextNode で安全に処理
     function appendMessage(sender, text) {
         const msgDiv = document.createElement('div');
         msgDiv.className = `message ${sender}-message`;
-        // 改行をbrタグに変換
-        const formattedText = text.replace(/\n/g, '<br>');
-        msgDiv.innerHTML = `<p>${formattedText}</p>`;
+        const p = document.createElement('p');
+        // 改行を <br> に変換する際も DOM 操作で行い、HTML インジェクションを防ぐ
+        text.split('\n').forEach((line, i) => {
+            if (i > 0) p.appendChild(document.createElement('br'));
+            p.appendChild(document.createTextNode(line));
+        });
+        msgDiv.appendChild(p);
         chatMessages.appendChild(msgDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight; // スクロールを下へ
+        chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
     function translateScope(scope) {
