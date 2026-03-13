@@ -302,8 +302,8 @@ function calculateScore(company, program) {
     const prefectureField = program.prefecture || '';
 
     // 特別枠フラグ（足切り判定より前に定義する）
-    const isITSubsidy   = programName.includes('IT導入');
-    const isMonoSubsidy = programName.includes('ものづくり');
+    const isITSubsidy   = programName.includes('IT導入補助金');
+    const isMonoSubsidy = programName.includes('ものづくり・商業・サービス');
 
     if (DEBUG) {
         console.log(`\n[SCORE DEBUG] === ${program.id}: ${programName.substring(0, 40)} ===`);
