@@ -63,6 +63,21 @@ async function updatePrograms() {
     let updated = 0;
     let errors = 0;
 
+    // Step 1: programs.json に存在しない jg- 始まりのレコードをDBから物理DELETE
+    const jsonJgIds = programs.filter(p => p.id.startsWith('jg-')).map(p => p.id);
+    if (jsonJgIds.length > 0) {
+        const deleteResult = await pool.query(
+            `DELETE FROM subsidy_programs
+             WHERE id LIKE 'jg-%'
+             AND id != ALL($1::text[])`,
+            [jsonJgIds]
+        );
+        console.log(`🗑️  DBから物理DELETE: ${deleteResult.rowCount} 件 (jg- 始まりで programs.json に存在しないもの)`);
+    } else {
+        console.log('ℹ️  jg- 始まりのプログラムが programs.json に存在しないため、DB DELETE はスキップしました');
+    }
+
+    // Step 2: UPSERT（個別実行 — Supabaseプーラーのlong-running transaction制限を回避）
     for (const p of programs) {
         try {
             await pool.query(upsertQuery, [
@@ -84,7 +99,7 @@ async function updatePrograms() {
                 p.official_url,                   // source_url
                 p.is_active !== undefined ? p.is_active : 1
             ]);
-            console.log(`  ✅ ${p.id}: ${p.name}`);
+            if (updated % 100 === 0) console.log(`  ✅ [${updated + 1}/${programs.length}] ${p.id}: ${p.name}`);
             updated++;
         } catch (err) {
             console.error(`  ❌ ${p.id}: ${err.message}`);

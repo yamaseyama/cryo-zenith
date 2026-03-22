@@ -1,3 +1,22 @@
+// XSS対策: HTML特殊文字をエンティティに変換するヘルパー
+function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// URLサニタイズ: http/https以外のスキームをブロック
+function sanitizeUrl(url) {
+    if (url == null) return '#';
+    const trimmed = String(url).trim();
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return '#';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // Elements
     const heroSection = document.getElementById('hero');
@@ -233,28 +252,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const reason = prog.why_fit_llm || prog.reasons.join('。');
 
+            // XSS対策: すべての動的値をエスケープしてからinnerHTMLに展開
+            const safeOfficialUrl = sanitizeUrl(prog.official_url);
             card.innerHTML = `
                 <div class="program-header">
-                    <div class="program-title">${prog.name}</div>
-                    <div class="match-score">適合度: ${prog.fit_score}点</div>
+                    <div class="program-title">${escapeHtml(prog.name)}</div>
+                    <div class="match-score">適合度: ${escapeHtml(String(prog.fit_score))}点</div>
                 </div>
                 <div class="program-meta">
-                    <span class="tag">${translateScope(prog.scope)}</span>
-                    <span class="tag">${translateType(prog.type)}</span>
+                    <span class="tag">${escapeHtml(translateScope(prog.scope))}</span>
+                    <span class="tag">${escapeHtml(translateType(prog.type))}</span>
                     ${prog.application_status === 'open' ? '<span class="tag" style="background:#DCFCE7;color:#166534">公募中</span>' : ''}
                     ${prog.application_status === 'upcoming' ? '<span class="tag" style="background:#FEF3C7;color:#92400E">募集予定</span>' : ''}
                 </div>
                 <div style="margin-bottom: 1rem;">
-                    <p><strong>対象:</strong> ${prog.eligibility_text}</p>
-                    <p><strong>メリット:</strong> ${prog.benefit_text}</p>
-                    <p><strong>補助額:</strong> ${prog.amount_text}</p>
+                    <p><strong>対象:</strong> ${escapeHtml(prog.eligibility_text)}</p>
+                    <p><strong>メリット:</strong> ${escapeHtml(prog.benefit_text)}</p>
+                    <p><strong>補助額:</strong> ${escapeHtml(prog.amount_text)}</p>
                 </div>
                 <div class="program-reason">
                     <div class="reason-title">AI解説・適合理由</div>
-                    <p>${reason}</p>
+                    <p>${escapeHtml(reason)}</p>
                 </div>
                 <div style="text-align: right; margin-top: 1rem; display: flex; justify-content: flex-end; gap: 0.5rem;">
-                    <a href="${prog.official_url}" target="_blank" class="btn secondary-btn" style="font-size:0.9rem; padding: 0.5rem 1rem;">公式サイトを見る</a>
+                    <a href="${escapeHtml(safeOfficialUrl)}" target="_blank" rel="noopener noreferrer" class="btn secondary-btn" style="font-size:0.9rem; padding: 0.5rem 1rem;">公式サイトを見る</a>
                 </div>
             `;
             programsList.appendChild(card);
@@ -322,7 +343,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (response.ok) {
                 appendMessage('ai', data.answer);
             } else {
-                appendMessage('ai', 'エラーが発生しました: ' + (data.error || '不明なエラー'));
+                const errorText = ('エラーが発生しました: ' + (data.error || '不明なエラー')).slice(0, 200);
+                appendMessage('ai', errorText);
             }
         } catch (error) {
             console.error('Chat API Error:', error);

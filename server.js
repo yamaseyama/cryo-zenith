@@ -31,7 +31,7 @@ app.use(cors({
 app.use(express.json({ limit: '1mb' })); // リクエストサイズ制限
 app.use(express.static('public'));
 
-// レートリミット: IP単位で15分あたり100リクエスト
+// レートリミット: IP単位で15分あたり100リクエスト（全APIエンドポイント共通）
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15分
     max: 100,                  // 最大100リクエスト/IP
@@ -40,6 +40,17 @@ const apiLimiter = rateLimit({
     message: { error: 'リクエスト数が上限を超えました。しばらく経ってから再度お試しください。' }
 });
 app.use('/api/', apiLimiter);
+
+// LLM専用レートリミット: IP単位で15分あたり20リクエスト（/api/diagnose, /api/chat）
+const llmLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15分
+    max: 20,                   // 最大20リクエスト/IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'AI診断・チャットのリクエスト数が上限を超えました。しばらく経ってから再度お試しください。' }
+});
+app.use('/api/diagnose', llmLimiter);
+app.use('/api/chat', llmLimiter);
 
 // ========================================
 // Database Connection Pool（接続プール化）
@@ -97,6 +108,10 @@ class TTLCache {
         return this.get(key) !== null;
     }
 
+    clear() {
+        this.cache.clear();
+    }
+
     get size() {
         return this.cache.size;
     }
@@ -109,6 +124,18 @@ const diagnosisCache = new TTLCache(CACHE_TTL_MS, CACHE_MAX_SIZE);
 // ========================================
 const { calculateScore } = require('./scoring');
 const { generateExplanation, generateChatResponse } = require('./llm');
+
+// 都道府県ホワイトリスト（userPrefectureのバリデーション用）
+const ALL_PREFECTURES = [
+    '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
+    '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
+    '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県',
+    '岐阜県', '静岡県', '愛知県', '三重県',
+    '滋賀県', '京都府', '大阪府', '兵庫県', '奈良県', '和歌山県',
+    '鳥取県', '島根県', '岡山県', '広島県', '山口県',
+    '徳島県', '香川県', '愛媛県', '高知県',
+    '福岡県', '佐賀県', '長崎県', '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県'
+];
 
 // Helper: キャッシュキー生成
 function generateCacheKey(body) {
@@ -141,14 +168,61 @@ app.get('/api/programs', async (req, res) => {
     }
 });
 
+// Helper: メールアドレスをマスクする（例: h***@example.com）
+function maskEmail(email) {
+    if (!email || !email.includes('@')) return '***';
+    const [local, domain] = email.split('@');
+    return `${local.charAt(0)}***@${domain}`;
+}
+
 // 診断エンドポイント
 app.post('/api/diagnose', async (req, res) => {
     try {
-        const company = req.body;
+        // 入力バリデーション
+        const rawBody = req.body;
+
+        const company_name = typeof rawBody.company_name === 'string' ? rawBody.company_name.slice(0, 500).trim() : '';
+        const contact_person = typeof rawBody.contact_person === 'string' ? rawBody.contact_person.slice(0, 500).trim() : '';
+        const email = typeof rawBody.email === 'string' ? rawBody.email.slice(0, 500).trim() : '';
+
+        if (!company_name || !contact_person || !email) {
+            return res.status(400).json({ error: '会社名、担当者名、メールアドレスは必須です' });
+        }
+
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailPattern.test(email)) {
+            return res.status(400).json({ error: 'メールアドレスの形式が正しくありません' });
+        }
+
+        const employees_count = parseInt(rawBody.employees_count, 10);
+        if (isNaN(employees_count)) {
+            return res.status(400).json({ error: '従業員数は数値で入力してください' });
+        }
+
+        const purposes = Array.isArray(rawBody.purposes) ? rawBody.purposes : [];
+
+        // prefectureバリデーション（キャッシュ確認より前に実施）
+        const rawPrefecture = typeof rawBody.prefecture === 'string' ? rawBody.prefecture.trim() : '';
+        if (!rawPrefecture) {
+            return res.status(400).json({ error: '所在地（都道府県）は必須です' });
+        }
+        if (!ALL_PREFECTURES.includes(rawPrefecture)) {
+            return res.status(400).json({ error: '所在地（都道府県）の値が正しくありません' });
+        }
+
+        const company = {
+            ...rawBody,
+            company_name,
+            contact_person,
+            email,
+            employees_count,
+            purposes,
+            phone: typeof rawBody.phone === 'string' ? rawBody.phone.slice(0, 500).trim() : '',
+        };
 
         // リード情報のログ出力＆DB保存
         console.log('--- New Lead Received ---');
-        console.log(`Company: ${company.company_name}`);
+        console.log(`Company: ${company.company_name}, Email: ${maskEmail(company.email)}`);
 
         // M-4: リード保存リトライ（最大2回 / 失敗時は CRITICAL ログで可視化）
         let leadSaveSuccess = false;
@@ -176,8 +250,7 @@ app.post('/api/diagnose', async (req, res) => {
         }
         if (!leadSaveSuccess) {
             // どのリードが失われたかを特定できるよう最低限の情報をログに残す
-            console.error(`[LEAD][CRITICAL] Lead LOST: company=${company.company_name} | email=${company.email}`);
-            res.setHeader('X-Lead-Save-Status', 'failed');
+            console.error(`[LEAD][CRITICAL] Lead LOST: company=${company.company_name} | email=${maskEmail(company.email)}`);
         }
 
         console.log('-------------------------');
@@ -257,11 +330,7 @@ app.post('/api/diagnose', async (req, res) => {
             return res.json(cached);
         }
 
-        // 懸念点A: prefecture が空/未定義の場合は全件マッチを防ぐためエラーで弾く
-        const userPrefecture = company.prefecture;
-        if (!userPrefecture || userPrefecture.trim() === '') {
-            return res.status(400).json({ error: '所在地（都道府県）は必須です' });
-        }
+        const userPrefecture = rawPrefecture;
 
         const result = await pool.query(
             `SELECT
@@ -276,7 +345,7 @@ app.post('/api/diagnose', async (req, res) => {
                   scope = 'national'
                   OR (scope = 'prefecture' AND prefecture ILIKE $1)
               )`,
-            [`%${userPrefecture}%`]
+            [userPrefecture]
         );
         console.log(`[DIAGNOSE] Pre-filtered programs: ${result.rows.length} 件 (prefecture: ${userPrefecture})`);
         const programs = result.rows.map(p => ({
@@ -362,11 +431,20 @@ app.post('/api/diagnose', async (req, res) => {
 // AIチャット（個別相談）エンドポイント
 app.post('/api/chat', async (req, res) => {
     try {
-        const { program_id, question } = req.body;
+        const rawBody = req.body;
 
-        if (!program_id || !question) {
+        if (typeof rawBody.program_id !== 'string' || !rawBody.program_id) {
+            return res.status(400).json({ error: 'プログラムIDは文字列で指定してください' });
+        }
+
+        const program_id = rawBody.program_id.slice(0, 128).trim();
+        const questionRaw = rawBody.question;
+
+        if (!questionRaw) {
             return res.status(400).json({ error: 'プログラムIDと質問文が必要です' });
         }
+
+        const question = String(questionRaw).slice(0, 2000);
 
         // DBから該当のプログラム情報を取得
         const result = await pool.query('SELECT * FROM subsidy_programs WHERE id = $1', [program_id]);
@@ -391,14 +469,27 @@ app.post('/api/chat', async (req, res) => {
 // 商談予約エンドポイント
 app.post('/api/consultation', async (req, res) => {
     try {
-        const {
-            company_name, contact_person, phone, email,
-            preferred_date1, preferred_date2, preferred_date3,
-            consultation_note, matched_programs
-        } = req.body;
+        const rawBody = req.body;
+
+        const company_name = typeof rawBody.company_name === 'string' ? rawBody.company_name.slice(0, 500).trim() : '';
+        const contact_person = typeof rawBody.contact_person === 'string' ? rawBody.contact_person.slice(0, 500).trim() : '';
+        const email = typeof rawBody.email === 'string' ? rawBody.email.slice(0, 500).trim() : '';
+        const phone = typeof rawBody.phone === 'string' ? rawBody.phone.slice(0, 500).trim() : '';
+        const preferred_date1 = rawBody.preferred_date1 || '';
+        const preferred_date2 = rawBody.preferred_date2 || null;
+        const preferred_date3 = rawBody.preferred_date3 || null;
+        const consultation_note = typeof rawBody.consultation_note === 'string'
+            ? rawBody.consultation_note.slice(0, 2000)
+            : '';
+        const matched_programs = Array.isArray(rawBody.matched_programs) ? rawBody.matched_programs : [];
 
         if (!company_name || !contact_person || !email || !preferred_date1) {
             return res.status(400).json({ error: '必須項目を入力してください' });
+        }
+
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailPattern.test(email)) {
+            return res.status(400).json({ error: 'メールアドレスの形式が正しくありません' });
         }
 
         const insertQuery = `
@@ -412,9 +503,9 @@ app.post('/api/consultation', async (req, res) => {
 
         const result = await pool.query(insertQuery, [
             company_name, contact_person, phone, email,
-            preferred_date1, preferred_date2 || null, preferred_date3 || null,
-            consultation_note || '',
-            JSON.stringify(matched_programs || []),
+            preferred_date1, preferred_date2, preferred_date3,
+            consultation_note,
+            JSON.stringify(matched_programs),
             'pending'
         ]);
 
@@ -442,11 +533,10 @@ app.post('/api/feedback', (req, res) => {
 app.get('/api/health', async (req, res) => {
     try {
         await pool.query('SELECT 1');
+        // セキュリティ: uptime/memoryはシステム情報を露出するため返さない
         res.json({
             status: 'ok',
-            cache_size: diagnosisCache.size,
-            uptime: Math.floor(process.uptime()),
-            memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB'
+            cache_size: diagnosisCache.size
         });
     } catch (error) {
         res.status(500).json({ status: 'error', message: 'Database connection failed' });
@@ -468,10 +558,13 @@ app.post('/api/admin/clear-cache', (req, res) => {
     }
 
     const sizeBefore = diagnosisCache.size;
-    diagnosisCache.cache.clear();
+    diagnosisCache.clear();
     console.log(`[ADMIN] Cache cleared. Before: ${sizeBefore} entries.`);
     res.json({ success: true, cleared_count: sizeBefore });
 });
+
+// テスト用エクスポート（Expressアプリとしての動作を維持しつつ、ユニットテストからimport可能にする）
+module.exports = { maskEmail };
 
 // Start Server
 app.listen(port, () => {
