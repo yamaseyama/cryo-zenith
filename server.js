@@ -563,8 +563,9 @@ app.post('/api/admin/clear-cache', (req, res) => {
     res.json({ success: true, cleared_count: sizeBefore });
 });
 
-// テスト用エクスポート（Expressアプリとしての動作を維持しつつ、ユニットテストからimport可能にする）
-module.exports = { maskEmail };
+// Vercel Serverless Function 用エクスポート + テスト用ヘルパー
+module.exports = app;
+module.exports.maskEmail = maskEmail;
 
 // Start Server
 app.listen(port, () => {
