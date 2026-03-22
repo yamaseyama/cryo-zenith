@@ -2,10 +2,11 @@
  * check_freshness.js - 補助金データ鮮度チェック & 過去年度データ物理削除
  *
  * 修正ポイント:
- * 1. 令和4〜7年度、2022〜2025年度をすべてカバーする正規表現
+ * 1. 「現在年度（令和8/2026）以降」以外の年度表記を含むデータを全て削除
  * 2. 過去年度データを stale に更新するのではなく DB から物理DELETE
  * 3. DELETE した件数と対象プログラム名をログ出力
  * 4. eligibility_text も年度チェック対象に追加（name だけでは漏れがある）
+ * 5. acceptance=0（募集予定）由来のゴミデータ対策
  */
 
 require('dotenv').config();
@@ -40,19 +41,44 @@ async function checkFreshness() {
     // =============================================
     // チェック1: 過去年度の文字列検知 → 削除対象IDを収集
     // =============================================
-    // 対象: 令和4, 5, 6, 7年度 = 2022, 2023, 2024, 2025年度
-    const pastYearRegex = /令和[4-7]年度|令和[四五六七]年度|R[4-7]年度|202[2-5]年度|平成[0-9]+年度/;
+    // 方針: 年度表記を含むデータのうち「現在年度（令和8/2026）以降」でないものを削除
+    // - 令和8, 2026 → 現在年度 → 残す
+    // - 令和9以降, 2027以降 → 未来年度 → 残す
+    // - 令和7以前, 2025以前 → 過去年度 → 削除
+    // - 平成 → 全て削除
+    // - 年度表記なし → 残す
+    const CURRENT_REIWA = 8;   // 令和8年 = 2026年
+    const CURRENT_AD = 2026;
+
+    // 全角数字→半角変換
+    function normalizeFullWidth(text) {
+        return text.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+    }
+
+    // 過去年度を検知する正規表現（半角変換後のテキストに適用）
+    const pastYearPatterns = [
+        /令和[1-7]年/,        // 令和1〜7年
+        /令和[一二三四五六七]年/, // 漢数字
+        /R[1-7]年/,           // R表記
+        /平成\d+年/,          // 平成全て
+        /20[0-1]\d年/,        // 2000〜2019年
+        /202[0-5]年/,         // 2020〜2025年
+    ];
+
+    function containsPastYear(text) {
+        if (!text) return false;
+        const normalized = normalizeFullWidth(text);
+        return pastYearPatterns.some(regex => regex.test(normalized));
+    }
+
     const deleteTargetIds = [];
 
     for (const row of result.rows) {
-        const nameMatch = pastYearRegex.test(row.name || '');
-        const benefitMatch = pastYearRegex.test(row.benefit_text || '');
-        const eligibilityMatch = pastYearRegex.test(row.eligibility_text || '');
+        const fields = [row.name || '', row.benefit_text || '', row.eligibility_text || ''];
+        const hasPastYear = fields.some(f => containsPastYear(f));
 
-        if (nameMatch || benefitMatch || eligibilityMatch) {
-            const reason = `過去年度データ検知 (name:${nameMatch}, benefit:${benefitMatch}, eligibility:${eligibilityMatch})`;
+        if (hasPastYear) {
             console.log(`  🗑️  削除対象: [${row.id}] ${row.name}`);
-            console.log(`     理由: ${reason}`);
             deleteTargetIds.push(row.id);
             deletedNames.push(row.name);
         }
