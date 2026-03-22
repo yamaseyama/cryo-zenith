@@ -79,35 +79,27 @@ async function fetchJGrants() {
     const keywords = ['補助金', '助成金', '支援', '公募', '中小企業', '創業', 'IT導入', '事業再構築'];
     const allSubsidies = new Map();
 
-    // acceptance=1（公募中）と acceptance=0（募集予定）の両方を取得
-    const acceptanceParams = [
-        { value: 1, status: 'open', label: '公募中' },
-        { value: 0, status: 'upcoming', label: '募集予定' }
-    ];
-
+    // acceptance=1（公募中）のみ取得
+    // NOTE: acceptance=0 は「募集予定」ではなく「受付していない全データ」が返るため使用しない
     for (const keyword of keywords) {
-        for (const acceptance of acceptanceParams) {
-            console.log(`📡 キーワード「${keyword}」で検索中... (${acceptance.label})`);
-            const url = `${BASE_URL}/subsidies?keyword=${encodeURIComponent(keyword)}&sort=created_date&order=DESC&acceptance=${acceptance.value}&limit=100`;
-            try {
-                const response = await fetch(url);
-                if (!response.ok) {
-                    console.warn(`  ⚠️ 検索エラー: HTTP ${response.status} (keyword: ${keyword}, acceptance: ${acceptance.label})`);
-                    continue;
-                }
-                const data = await response.json();
-                // acceptance ステータスをアイテムに付与して保存（open を明示的に優先）
-                (data.result || []).forEach(item => {
-                    const existing = allSubsidies.get(item.id);
-                    if (!existing || existing._acceptanceStatus !== 'open') {
-                        allSubsidies.set(item.id, { ...item, _acceptanceStatus: acceptance.status });
-                    }
-                });
-            } catch (err) {
-                console.error(`  ❌ 検索エラー: ${err.message}`);
+        console.log(`📡 キーワード「${keyword}」で検索中...`);
+        const url = `${BASE_URL}/subsidies?keyword=${encodeURIComponent(keyword)}&sort=created_date&order=DESC&acceptance=1&limit=100`;
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                console.warn(`  ⚠️ 検索エラー: HTTP ${response.status} (keyword: ${keyword})`);
+                continue;
             }
-            await sleep(300);
+            const data = await response.json();
+            (data.result || []).forEach(item => {
+                if (!allSubsidies.has(item.id)) {
+                    allSubsidies.set(item.id, item);
+                }
+            });
+        } catch (err) {
+            console.error(`  ❌ 検索エラー: ${err.message}`);
         }
+        await sleep(300);
     }
 
     const subsidyArray = Array.from(allSubsidies.entries());
@@ -122,7 +114,7 @@ async function fetchJGrants() {
 
     for (let i = 0; i < subsidyArray.length; i += CONCURRENCY) {
         const batch = subsidyArray.slice(i, i + CONCURRENCY);
-        await Promise.all(batch.map(async ([id, summaryItem]) => {
+        await Promise.all(batch.map(async ([id]) => {
             try {
                 const response = await fetch(`${BASE_URL}/subsidies/id/${id}`);
                 if (!response.ok) return;
@@ -131,8 +123,7 @@ async function fetchJGrants() {
                 if (!detail) return;
 
                 const internalId = `jg-${detail.name || id}`;
-                // 検索時に付与した acceptance ステータスを使用（open or upcoming）
-                const status = summaryItem._acceptanceStatus || 'open';
+                const status = 'open'; // acceptance=1 で取得済みのため一律「公募中」
 
                 fetchedPrograms.push({
                     id: internalId,
