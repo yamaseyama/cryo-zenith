@@ -9,6 +9,12 @@ const pool = new Pool({
 });
 
 async function syncPrograms() {
+    // H-5: 本番環境での誤実行防止ガード
+    if (process.env.NODE_ENV === 'production' && !process.env.FORCE_SYNC) {
+        console.error('❌ 本番環境での sync_programs 実行は禁止されています。FORCE_SYNC=1 を設定して明示的に実行してください。');
+        process.exit(1);
+    }
+
     const jsonPath = path.join(__dirname, 'data', 'programs.json');
     if (!fs.existsSync(jsonPath)) {
         console.error('❌ data/programs.json が見つかりません。');

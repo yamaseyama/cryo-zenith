@@ -118,6 +118,13 @@ Markdownのコードブロックは不要です。以下のJSON形式のみを�
         });
 
         const result = JSON.parse(completion.choices[0].message.content);
+
+        // H-6: レスポンススキーマ検証
+        if (!result.programs || !Array.isArray(result.programs) || !result.summary) {
+            console.error('[LLM] Invalid response schema, falling back to mock');
+            return mockResponse(programs);
+        }
+
         return result;
 
     } catch (error) {

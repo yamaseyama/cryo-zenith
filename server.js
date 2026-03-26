@@ -57,7 +57,7 @@ app.use('/api/chat', llmLimiter);
 // ========================================
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    max: 20,               // 最大接続数
+    max: 5,                // 最大接続数（Vercel Serverless向けに縮小）
     idleTimeoutMillis: 30000,  // アイドル接続のタイムアウト（30秒）
     connectionTimeoutMillis: 5000, // 接続タイムアウト（5秒）
 });
@@ -70,7 +70,7 @@ pool.on('error', (err) => {
     console.error('Unexpected error on idle PostgreSQL client:', err);
 });
 
-console.log('PostgreSQL connection pool initialized (max: 20 connections).');
+console.log('PostgreSQL connection pool initialized (max: 5 connections).');
 
 // ========================================
 // TTL付きキャッシュ（メモリ管理改善）
@@ -137,6 +137,18 @@ const ALL_PREFECTURES = [
     '福岡県', '佐賀県', '長崎県', '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県'
 ];
 
+// 許可リスト: purposes（C-2対策: プロンプトインジェクション防止）
+const ALLOWED_PURPOSES = [
+    'hiring', 'it_implementation', 'productivity',
+    'new_product', 'marketing', 'startup'
+];
+
+// 許可リスト: industry（C-3対策: プロンプトインジェクション防止）
+const ALLOWED_INDUSTRIES = [
+    'manufacturing', 'retail', 'service',
+    'it', 'restaurant', 'construction', 'other'
+];
+
 // Helper: キャッシュキー生成
 function generateCacheKey(body) {
     const { prefecture, industry, employees_count, purposes } = body;
@@ -199,7 +211,14 @@ app.post('/api/diagnose', async (req, res) => {
             return res.status(400).json({ error: '従業員数は数値で入力してください' });
         }
 
-        const purposes = Array.isArray(rawBody.purposes) ? rawBody.purposes : [];
+        const rawPurposes = Array.isArray(rawBody.purposes) ? rawBody.purposes : [];
+        const purposes = rawPurposes.filter(p => ALLOWED_PURPOSES.includes(p));
+
+        // industryバリデーション
+        const rawIndustry = typeof rawBody.industry === 'string' ? rawBody.industry.trim() : '';
+        if (rawIndustry && !ALLOWED_INDUSTRIES.includes(rawIndustry)) {
+            return res.status(400).json({ error: '業種の値が正しくありません' });
+        }
 
         // prefectureバリデーション（キャッシュ確認より前に実施）
         const rawPrefecture = typeof rawBody.prefecture === 'string' ? rawBody.prefecture.trim() : '';
@@ -217,7 +236,8 @@ app.post('/api/diagnose', async (req, res) => {
             email,
             employees_count,
             purposes,
-            phone: typeof rawBody.phone === 'string' ? rawBody.phone.slice(0, 500).trim() : '',
+            industry: rawIndustry,
+            phone: typeof rawBody.phone === 'string' ? rawBody.phone.slice(0, 20).trim() : '',
         };
 
         // リード情報のログ出力＆DB保存
@@ -474,14 +494,21 @@ app.post('/api/consultation', async (req, res) => {
         const company_name = typeof rawBody.company_name === 'string' ? rawBody.company_name.slice(0, 500).trim() : '';
         const contact_person = typeof rawBody.contact_person === 'string' ? rawBody.contact_person.slice(0, 500).trim() : '';
         const email = typeof rawBody.email === 'string' ? rawBody.email.slice(0, 500).trim() : '';
-        const phone = typeof rawBody.phone === 'string' ? rawBody.phone.slice(0, 500).trim() : '';
-        const preferred_date1 = rawBody.preferred_date1 || '';
-        const preferred_date2 = rawBody.preferred_date2 || null;
-        const preferred_date3 = rawBody.preferred_date3 || null;
+        const phone = typeof rawBody.phone === 'string' ? rawBody.phone.slice(0, 20).trim() : '';
+
+        // 日付バリデーション（ISO 8601形式のみ許可）
+        const datePattern = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/;
+        const preferred_date1 = typeof rawBody.preferred_date1 === 'string' && datePattern.test(rawBody.preferred_date1) ? rawBody.preferred_date1 : '';
+        const preferred_date2 = typeof rawBody.preferred_date2 === 'string' && datePattern.test(rawBody.preferred_date2) ? rawBody.preferred_date2 : null;
+        const preferred_date3 = typeof rawBody.preferred_date3 === 'string' && datePattern.test(rawBody.preferred_date3) ? rawBody.preferred_date3 : null;
+
         const consultation_note = typeof rawBody.consultation_note === 'string'
             ? rawBody.consultation_note.slice(0, 2000)
             : '';
-        const matched_programs = Array.isArray(rawBody.matched_programs) ? rawBody.matched_programs : [];
+
+        // matched_programs: 文字列配列のみ許可、最大10件
+        const rawMatched = Array.isArray(rawBody.matched_programs) ? rawBody.matched_programs : [];
+        const matched_programs = rawMatched.filter(p => typeof p === 'string').slice(0, 10);
 
         if (!company_name || !contact_person || !email || !preferred_date1) {
             return res.status(400).json({ error: '必須項目を入力してください' });
@@ -538,7 +565,7 @@ app.get('/api/health', async (req, res) => {
             status: 'ok',
             cache_size: diagnosisCache.size
         });
-    } catch (error) {
+    } catch (_error) {
         res.status(500).json({ status: 'error', message: 'Database connection failed' });
     }
 });
@@ -567,10 +594,12 @@ app.post('/api/admin/clear-cache', (req, res) => {
 module.exports = app;
 module.exports.maskEmail = maskEmail;
 
-// Start Server
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Rate limit: 100 req/15min per IP`);
-    console.log(`Cache TTL: ${CACHE_TTL_MS / 1000 / 60}min, Max: ${CACHE_MAX_SIZE} entries`);
-});
+// Start Server（Vercel Serverless では不要）
+if (process.env.VERCEL !== '1') {
+    app.listen(port, () => {
+        console.log(`Server running at http://localhost:${port}`);
+        console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`Rate limit: 100 req/15min per IP`);
+        console.log(`Cache TTL: ${CACHE_TTL_MS / 1000 / 60}min, Max: ${CACHE_MAX_SIZE} entries`);
+    });
+}

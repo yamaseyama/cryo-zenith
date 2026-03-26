@@ -149,7 +149,7 @@ function containsOldYear(text) {
 
     // ── 追加：令和X-Y年度 / 令和X〜Y年度 形式（期間表記）──
     // 例: 令和5-6年度、令和6−7年度
-    for (const m of text.matchAll(/令和([0-9０-９]+)[\-−〜～]([0-9０-９]+)年/g)) {
+    for (const m of text.matchAll(/令和([0-9０-９]+)[-−〜～]([0-9０-９]+)年/g)) {
         // 開始年が現在年度未満ならアウト
         const startAscii = [...m[1]].reduce((a, c) => a * 10 + (ZEN_TO_HAN[c] ?? parseInt(c, 10) ?? 0), 0);
         if (startAscii > 0 && startAscii < CURRENT_REIWA_YEAR) {
@@ -285,7 +285,7 @@ function safeParseArray(val) {
     if (Array.isArray(val)) return val;
     if (typeof val === 'string') {
         try { const p = JSON.parse(val); return Array.isArray(p) ? p : []; }
-        catch (e) { return []; }
+        catch (_e) { return []; }
     }
     return [];
 }

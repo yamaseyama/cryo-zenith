@@ -12,14 +12,17 @@
     "db:fetch": "node fetch_jgrants.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint *.js",
+    "knip": "knip",
+    "cspell": "cspell \"*.js\"",
+    "quality": "pnpm lint && pnpm knip && pnpm cspell"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "better-sqlite3": "^12.6.2",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
@@ -28,6 +31,9 @@
     "pg": "^8.20.0"
   },
   "devDependencies": {
+    "cspell": "^8.0.0",
+    "eslint": "^9.0.0",
+    "knip": "^5.0.0",
     "nodemon": "^3.1.11",
     "vitest": "^3.2.1"
   }

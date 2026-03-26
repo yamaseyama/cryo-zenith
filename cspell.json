@@ -1,0 +1,6 @@
+{
+  "version": "0.2",
+  "language": "en,ja",
+  "words": ["vitest", "pnpm", "wakeclap", "sqlite", "openai"],
+  "ignorePaths": ["node_modules", "coverage", "dist"]
+}
